@@ -10,7 +10,8 @@ import {
   Users, 
   Settings, 
   LogOut,
-  CalendarCheck
+  CalendarCheck,
+  Wallet
 } from 'lucide-react';
 import Logo from '../ui/Logo';
 import { createClient } from '@/app/lib/supabase/client';
@@ -80,6 +81,7 @@ export default function Sidebar() {
     { name: 'Beranda', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Laporan', href: '/laporan', icon: BarChart2 },
     { name: 'Produk', href: '/produk', icon: Box },
+    { name: 'Pengeluaran', href: '/pengeluaran', icon: Wallet },
     { name: 'Pelanggan', href: '/member', icon: Users },
     { name: 'Absensi', href: '/absensi', icon: CalendarCheck },
     { name: 'Pengaturan', href: '/pengaturan', icon: Settings },

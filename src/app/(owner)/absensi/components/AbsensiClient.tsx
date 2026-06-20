@@ -133,13 +133,13 @@ export default function AbsensiClient({ attendances, employees, shifts }: Absens
                 <div className="bg-primary-container/10 border border-primary-container/20 rounded-xl p-4">
                   <p className="text-[11px] font-semibold tracking-wider text-text-secondary uppercase">Karyawan Hadir</p>
                   <p className="text-3xl font-bold text-primary-container mt-1">
-                    {new Set(attendances.filter(a => new Date(a.date).toDateString() === new Date().toDateString()).map(a => a.employeeId)).size} orang
+                    {new Set(attendances.filter(a => a.checkIn && new Date(a.checkIn).toDateString() === new Date().toDateString()).map(a => a.employeeId)).size} orang
                   </p>
                 </div>
                 <div className="bg-secondary/10 border border-secondary/20 rounded-xl p-4">
                   <p className="text-[11px] font-semibold tracking-wider text-text-secondary uppercase">Total Estimasi Upah</p>
                   <p className="text-3xl font-bold text-secondary mt-1">
-                    Rp {attendances.filter(a => new Date(a.date).toDateString() === new Date().toDateString()).reduce((sum, a) => sum + (a.totalWage || 0), 0).toLocaleString('id-ID')}
+                    Rp {attendances.filter(a => a.checkIn && new Date(a.checkIn).toDateString() === new Date().toDateString()).reduce((sum, a) => sum + (a.totalWage || 0), 0).toLocaleString('id-ID')}
                   </p>
                 </div>
               </div>

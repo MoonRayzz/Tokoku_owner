@@ -9,7 +9,8 @@ import {
   Wallet, 
   ReceiptText, 
   Activity,
-  Filter
+  Filter,
+  TrendingUp
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -28,6 +29,10 @@ export default async function LaporanPage({
   const startParam = typeof resolvedParams.start === 'string' ? resolvedParams.start : '';
   const endParam = typeof resolvedParams.end === 'string' ? resolvedParams.end : '';
   const shiftParam = typeof resolvedParams.shift === 'string' ? resolvedParams.shift : '';
+  
+  const pageParam = typeof resolvedParams.page === 'string' ? parseInt(resolvedParams.page) : 1;
+  const page = isNaN(pageParam) || pageParam < 1 ? 1 : pageParam;
+  const limit = 20;
 
   const now = new Date();
   const todayStr = format(now, 'yyyy-MM-dd');
@@ -39,22 +44,57 @@ export default async function LaporanPage({
   // Ambil daftar shift untuk filter
   const shifts = await prisma.shift.findMany({ where: { isActive: true } });
 
-  // Data transaksi untuk periode terpilih
-  const transactions = await prisma.transaction.findMany({
+  const whereClause = {
+    createdAt: { gte: startDate, lte: endDate },
+    isVoid: false,
+    ...(shiftParam ? { shiftId: shiftParam } : {})
+  };
+
+  // Optimasi: Hitung total menggunakan aggregate, bukan fetch semua data (Meringankan memori)
+  const aggregate = await prisma.transaction.aggregate({
+    where: whereClause,
+    _sum: { totalAmount: true },
+    _count: { id: true }
+  });
+
+  const totalSales = aggregate._sum.totalAmount || 0;
+  const totalCount = aggregate._count.id;
+  
+  // Total Pengeluaran
+  const expenseAggregate = await prisma.expense.aggregate({
     where: {
-      createdAt: { gte: startDate, lte: endDate },
-      isVoid: false,
+      date: { gte: startDate, lte: endDate },
       ...(shiftParam ? { shiftId: shiftParam } : {})
     },
+    _sum: { amount: true }
+  });
+  const totalExpense = expenseAggregate._sum.amount || 0;
+
+  // Laba Bersih
+  // Harus ambil details untuk hitung HPP
+  const allTxForProfit = await prisma.transaction.findMany({
+    where: whereClause,
+    include: { details: true }
+  });
+  const totalHpp = allTxForProfit.reduce((sum, tx) => {
+    return sum + tx.details.reduce((ds, d) => ds + ((d.priceBuyAtTime || 0) * d.quantity), 0);
+  }, 0);
+
+  const netProfit = totalSales - totalHpp - totalExpense;
+  
+  // Data transaksi untuk tabel (di-paginate)
+  const transactions = await prisma.transaction.findMany({
+    where: whereClause,
     include: {
       member: true,
       details: { include: { product: true } }
     },
-    orderBy: { createdAt: 'desc' }
+    orderBy: { createdAt: 'desc' },
+    skip: (page - 1) * limit,
+    take: limit,
   });
 
-  const totalSales = transactions.reduce((sum, t) => sum + t.totalAmount, 0);
-  const totalCount = transactions.length;
+  const totalPages = Math.ceil(totalCount / limit);
   
   // Durasi hari untuk rata-rata (minimal 1)
   const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
@@ -133,32 +173,50 @@ export default async function LaporanPage({
       </section>
 
       {/* Summary Metrics */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <section className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
         {/* Metric 1 */}
         <div className="bg-surface border border-border rounded-xl p-5 flex flex-col relative overflow-hidden group hover:border-border-muted transition-colors">
           <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
-          <p className="text-sm text-text-secondary mb-2 flex items-center gap-2">
-            <Wallet size={18} /> Total Pendapatan Periode
+          <p className="text-xs text-text-secondary mb-2 flex items-center gap-1.5 uppercase font-semibold">
+            <Wallet size={16} /> Total Omzet
           </p>
-          <h3 className="text-3xl text-text-primary font-bold">Rp {totalSales.toLocaleString('id-ID')}</h3>
+          <h3 className="text-xl text-text-primary font-bold">Rp {totalSales.toLocaleString('id-ID')}</h3>
         </div>
         
         {/* Metric 2 */}
         <div className="bg-surface border border-border rounded-xl p-5 flex flex-col relative overflow-hidden group hover:border-border-muted transition-colors">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
-          <p className="text-sm text-text-secondary mb-2 flex items-center gap-2">
-            <ReceiptText size={18} /> Total Transaksi
+          <div className="absolute top-0 right-0 w-24 h-24 bg-error/5 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+          <p className="text-xs text-text-secondary mb-2 flex items-center gap-1.5 uppercase font-semibold">
+            <Wallet size={16} className="text-error" /> Total Pengeluaran
           </p>
-          <h3 className="text-3xl text-text-primary font-bold">{totalCount}</h3>
+          <h3 className="text-xl text-error font-bold">Rp {totalExpense.toLocaleString('id-ID')}</h3>
         </div>
         
         {/* Metric 3 */}
         <div className="bg-surface border border-border rounded-xl p-5 flex flex-col relative overflow-hidden group hover:border-border-muted transition-colors">
           <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
-          <p className="text-sm text-text-secondary mb-2 flex items-center gap-2">
-            <Activity size={18} /> Rata-rata Harian
+          <p className="text-xs text-text-secondary mb-2 flex items-center gap-1.5 uppercase font-semibold">
+            <TrendingUp size={16} className="text-primary" /> Laba Bersih
           </p>
-          <h3 className="text-3xl text-text-primary font-bold">Rp {Math.round(avgDaily).toLocaleString('id-ID')}</h3>
+          <h3 className="text-xl text-primary font-bold">Rp {netProfit.toLocaleString('id-ID')}</h3>
+        </div>
+
+        {/* Metric 4 */}
+        <div className="bg-surface border border-border rounded-xl p-5 flex flex-col relative overflow-hidden group hover:border-border-muted transition-colors">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+          <p className="text-xs text-text-secondary mb-2 flex items-center gap-1.5 uppercase font-semibold">
+            <ReceiptText size={16} /> Total Transaksi
+          </p>
+          <h3 className="text-xl text-text-primary font-bold">{totalCount}</h3>
+        </div>
+
+        {/* Metric 5 */}
+        <div className="bg-surface border border-border rounded-xl p-5 flex flex-col relative overflow-hidden group hover:border-border-muted transition-colors">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+          <p className="text-xs text-text-secondary mb-2 flex items-center gap-1.5 uppercase font-semibold">
+            <Activity size={16} /> Rata-rata Harian
+          </p>
+          <h3 className="text-xl text-text-primary font-bold">Rp {Math.round(avgDaily).toLocaleString('id-ID')}</h3>
         </div>
       </section>
 
@@ -180,7 +238,10 @@ export default async function LaporanPage({
                 <th className="sticky top-0 bg-surface-variant z-10 px-6 py-3 text-[11px] text-text-secondary font-semibold uppercase tracking-wider border-b border-border">No. Nota</th>
                 <th className="sticky top-0 bg-surface-variant z-10 px-6 py-3 text-[11px] text-text-secondary font-semibold uppercase tracking-wider border-b border-border">Kasir (Shift)</th>
                 <th className="sticky top-0 bg-surface-variant z-10 px-6 py-3 text-[11px] text-text-secondary font-semibold uppercase tracking-wider border-b border-border">Pelanggan</th>
-                <th className="sticky top-0 bg-surface-variant z-10 px-6 py-3 text-[11px] text-text-secondary font-semibold uppercase tracking-wider border-b border-border text-right">Total Belanja</th>
+                <th className="sticky top-0 bg-surface-variant z-10 px-6 py-3 text-[11px] text-text-secondary font-semibold uppercase tracking-wider border-b border-border text-right">Omzet</th>
+                <th className="sticky top-0 bg-surface-variant z-10 px-6 py-3 text-[11px] text-text-secondary font-semibold uppercase tracking-wider border-b border-border text-right">Modal (HPP)</th>
+                <th className="sticky top-0 bg-surface-variant z-10 px-6 py-3 text-[11px] text-text-secondary font-semibold uppercase tracking-wider border-b border-border text-right">Profit Kotor</th>
+                <th className="sticky top-0 bg-surface-variant z-10 px-6 py-3 text-[11px] text-text-secondary font-semibold uppercase tracking-wider border-b border-border text-center">Margin %</th>
                 <th className="sticky top-0 bg-surface-variant z-10 px-6 py-3 text-[11px] text-text-secondary font-semibold uppercase tracking-wider border-b border-border text-center">Metode Bayar</th>
               </tr>
             </thead>
@@ -193,6 +254,14 @@ export default async function LaporanPage({
                 transactions.map((tx) => {
                   const itemsSummary = tx.details.map(d => `${d.product.name} (${d.quantity})`).join(', ');
                   const shiftName = shifts.find(s => s.id === tx.shiftId)?.name || 'Unknown';
+                  
+                  let totalModal = 0;
+                  tx.details.forEach(d => {
+                    totalModal += (d.priceBuyAtTime || 0) * d.quantity;
+                  });
+                  const profitKotor = tx.totalAmount - totalModal;
+                  const marginPercent = tx.totalAmount > 0 ? (profitKotor / tx.totalAmount) * 100 : 0;
+
                   return (
                     <tr key={tx.id} className="bg-surface hover:bg-surface-container transition-colors group">
                       <td className="px-6 py-4 whitespace-nowrap text-text-secondary font-medium">{format(tx.createdAt, 'HH:mm', { locale: id })}</td>
@@ -205,6 +274,11 @@ export default async function LaporanPage({
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-text-primary">{tx.member?.name || 'Umum'}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-text-primary font-bold text-right">Rp {tx.totalAmount.toLocaleString('id-ID')}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-text-secondary text-right">Rp {totalModal.toLocaleString('id-ID')}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-primary-container font-bold text-right">Rp {profitKotor.toLocaleString('id-ID')}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-text-primary text-center">
+                        {totalModal > 0 ? `${marginPercent.toFixed(1)}%` : '-'}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${
                           tx.paymentMethod.toLowerCase() === 'cash' || tx.paymentMethod.toLowerCase() === 'tunai'
@@ -221,6 +295,34 @@ export default async function LaporanPage({
             </tbody>
           </table>
         </div>
+        
+        {/* Pagination UI */}
+        {totalPages > 1 && (
+          <div className="p-4 border-t border-border flex justify-between items-center bg-surface">
+            <span className="text-sm text-text-secondary font-medium">
+              Menampilkan {(page - 1) * limit + 1} - {Math.min(page * limit, totalCount)} dari {totalCount} transaksi
+            </span>
+            <div className="flex gap-2">
+              <Link 
+                href={`/laporan?start=${startParam}&end=${endParam}&shift=${shiftParam}&page=${page > 1 ? page - 1 : 1}`}
+                className={`px-3 py-1.5 rounded border text-sm transition-colors flex items-center ${page <= 1 ? 'border-border/50 text-text-secondary/50 pointer-events-none' : 'border-border text-text-primary hover:bg-surface-container'}`}
+              >
+                Sebelumnya
+              </Link>
+              
+              <div className="px-3 py-1.5 rounded bg-surface-container text-text-primary text-sm font-semibold border border-border">
+                {page} / {totalPages}
+              </div>
+
+              <Link 
+                href={`/laporan?start=${startParam}&end=${endParam}&shift=${shiftParam}&page=${page < totalPages ? page + 1 : totalPages}`}
+                className={`px-3 py-1.5 rounded border text-sm transition-colors flex items-center ${page >= totalPages ? 'border-border/50 text-text-secondary/50 pointer-events-none' : 'border-border text-text-primary hover:bg-surface-container'}`}
+              >
+                Selanjutnya
+              </Link>
+            </div>
+          </div>
+        )}
       </section>
     </div>
   );

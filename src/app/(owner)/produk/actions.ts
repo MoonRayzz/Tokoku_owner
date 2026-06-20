@@ -9,6 +9,8 @@ export async function updateProduct(formData: FormData) {
     const name = formData.get('name') as string;
     const sku = formData.get('sku') as string;
     const priceRetail = parseFloat(formData.get('priceRetail') as string);
+    const priceBuyStr = formData.get('priceBuy') as string;
+    const priceBuy = priceBuyStr ? parseFloat(priceBuyStr) : null;
     const stock = parseInt(formData.get('stock') as string) || 0;
     const priceWholesaleStr = formData.get('priceWholesale') as string;
     const wholesaleMinQtyStr = formData.get('wholesaleMinQty') as string;
@@ -26,6 +28,7 @@ export async function updateProduct(formData: FormData) {
       data: {
         name,
         sku,
+        priceBuy,
         priceRetail,
         stock,
         priceWholesale,

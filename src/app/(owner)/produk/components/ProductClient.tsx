@@ -161,7 +161,7 @@ export default function ProductClient({ products }: ProductClientProps) {
                         </div>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <span className="text-text-secondary">Rp {p.priceRetail.toLocaleString('id-ID')}</span>
+                        <span className="text-text-secondary">{p.priceBuy ? `Rp ${p.priceBuy.toLocaleString('id-ID')}` : '-'}</span>
                       </td>
                       <td className="px-6 py-4 text-right font-semibold text-text-primary">
                         Rp {p.priceRetail.toLocaleString('id-ID')}
@@ -242,6 +242,15 @@ export default function ProductClient({ products }: ProductClientProps) {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-text-secondary uppercase">Harga Beli / HPP</label>
+                  <input 
+                    type="number" 
+                    name="priceBuy" 
+                    defaultValue={editingProduct.priceBuy || ''} 
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-text-primary outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container"
+                  />
+                </div>
+                <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-text-secondary uppercase">Harga Retail</label>
                   <input 
                     type="number" 
@@ -251,16 +260,17 @@ export default function ProductClient({ products }: ProductClientProps) {
                     className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-text-primary outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container"
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-text-secondary uppercase">Stok</label>
-                  <input 
-                    type="number" 
-                    name="stock" 
-                    defaultValue={editingProduct.stock} 
-                    required 
-                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-text-primary outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container"
-                  />
-                </div>
+              </div>
+              
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-text-secondary uppercase">Stok</label>
+                <input 
+                  type="number" 
+                  name="stock" 
+                  defaultValue={editingProduct.stock} 
+                  required 
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-text-primary outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">

@@ -10,7 +10,9 @@ import {
   Calculator, 
   Users,
   AlertTriangle,
-  ArrowRight
+  ArrowRight,
+  Wallet,
+  TrendingUp
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -39,10 +41,37 @@ export default async function DashboardPage() {
     where: {
       createdAt: { gte: yesterdayStart, lte: yesterdayEnd },
       isVoid: false,
-    }
+    },
+    include: { details: true }
   });
 
   const yesterdaySales = yesterdayTx.reduce((sum, t) => sum + t.totalAmount, 0);
+
+  // Pengeluaran Hari Ini & Kemarin
+  const todayExpense = await prisma.expense.findMany({
+    where: { date: { gte: todayStart, lte: todayEnd } }
+  });
+  const totalExpense = todayExpense.reduce((sum, e) => sum + e.amount, 0);
+
+  const yesterdayExpense = await prisma.expense.findMany({
+    where: { date: { gte: yesterdayStart, lte: yesterdayEnd } }
+  });
+  const yesterdayTotalExpense = yesterdayExpense.reduce((sum, e) => sum + e.amount, 0);
+
+  // Kalkulasi HPP (Harga Pokok Penjualan)
+  const todayHpp = todayTx.reduce((sum, tx) => {
+    return sum + tx.details.reduce((ds, d) => ds + ((d.priceBuyAtTime || 0) * d.quantity), 0);
+  }, 0);
+
+  const yesterdayHpp = yesterdayTx.reduce((sum, tx) => {
+    return sum + tx.details.reduce((ds, d) => ds + ((d.priceBuyAtTime || 0) * d.quantity), 0);
+  }, 0);
+
+  const netProfit = totalSales - todayHpp - totalExpense;
+  const yesterdayNetProfit = yesterdaySales - yesterdayHpp - yesterdayTotalExpense;
+  
+  const profitTrend = yesterdayNetProfit === 0 ? (netProfit > 0 ? 100 : 0) : ((netProfit - yesterdayNetProfit) / Math.abs(yesterdayNetProfit)) * 100;
+  const expenseTrend = yesterdayTotalExpense === 0 ? (totalExpense > 0 ? 100 : 0) : ((totalExpense - yesterdayTotalExpense) / yesterdayTotalExpense) * 100;
   const yesterdayCount = yesterdayTx.length;
   
   const salesTrend = yesterdaySales === 0 ? 100 : ((totalSales - yesterdaySales) / yesterdaySales) * 100;
@@ -125,25 +154,34 @@ export default async function DashboardPage() {
       </div>
 
       {/* KPI Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
         <StatCard 
-          title="Pendapatan Hari Ini" 
+          title="Omzet Hari Ini" 
           value={`Rp ${totalSales.toLocaleString('id-ID')}`} 
-          trend={`${salesTrend > 0 ? '+' : ''}${salesTrend.toFixed(1)}% dari kemarin`}
+          trend={`${salesTrend > 0 ? '+' : ''}${salesTrend.toFixed(1)}%`}
           trendUp={salesTrend >= 0}
           icon={<Banknote size={20} />} 
         />
         <StatCard 
-          title="Total Transaksi" 
-          value={txCount} 
-          trend={`${countTrend > 0 ? '+' : ''}${countTrend} dari kemarin`}
-          trendUp={countTrend >= 0}
-          icon={<ReceiptText size={20} />} 
+          title="Pengeluaran Operasional" 
+          value={`Rp ${totalExpense.toLocaleString('id-ID')}`} 
+          trend={`${expenseTrend > 0 ? '+' : ''}${expenseTrend.toFixed(1)}%`}
+          trendUp={expenseTrend <= 0} // Jika pengeluaran turun, itu trend baik (hijau)
+          icon={<Wallet size={20} />} 
         />
         <StatCard 
-          title="Rata-rata Transaksi" 
-          value={`Rp ${Math.round(avgOrder).toLocaleString('id-ID')}`} 
-          icon={<Calculator size={20} />} 
+          title="Laba Bersih" 
+          value={`Rp ${netProfit.toLocaleString('id-ID')}`} 
+          trend={`${profitTrend > 0 ? '+' : ''}${profitTrend.toFixed(1)}%`}
+          trendUp={profitTrend >= 0}
+          icon={<TrendingUp size={20} />} 
+        />
+        <StatCard 
+          title="Total Transaksi" 
+          value={txCount} 
+          trend={`${countTrend > 0 ? '+' : ''}${countTrend}`}
+          trendUp={countTrend >= 0}
+          icon={<ReceiptText size={20} />} 
         />
         <StatCard 
           title="Member Aktif" 
