@@ -4,17 +4,9 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
-  LayoutDashboard, 
-  BarChart2, 
-  Box, 
-  Users, 
-  Settings, 
   LogOut,
-  CalendarCheck,
-  Wallet,
-  ShieldAlert,
-  BookOpen
 } from 'lucide-react';
+import { ownerNavItems } from '@/config/navigation';
 import Logo from '../ui/Logo';
 import { createClient } from '@/app/lib/supabase/client';
 import { useRouter } from 'next/navigation';
@@ -80,18 +72,6 @@ export default function Sidebar() {
     router.push('/login');
   };
 
-  const navItems = [
-    { name: 'Beranda', href: '/dashboard', icon: LayoutDashboard },
-    { name: 'Laporan Penjualan', href: '/laporan', icon: BarChart2 },
-    { name: 'Audit Void', href: '/laporan/void', icon: ShieldAlert },
-    { name: 'Produk', href: '/produk', icon: Box },
-    { name: 'Buku Utang', href: '/buku-utang', icon: BookOpen },
-    { name: 'Pengeluaran', href: '/pengeluaran', icon: Wallet },
-    { name: 'Pelanggan', href: '/member', icon: Users },
-    { name: 'Absensi', href: '/absensi', icon: CalendarCheck },
-    { name: 'Pengaturan', href: '/pengaturan', icon: Settings },
-  ];
-
   const [logoUrl, setLogoUrl] = useState('');
   const [storeName, setStoreName] = useState('TokoKu');
 
@@ -129,7 +109,7 @@ export default function Sidebar() {
 
       {/* Navigation Links */}
       <nav className="flex-1 px-4 space-y-1 overflow-y-auto">
-        {navItems.map((item) => {
+        {ownerNavItems.map((item) => {
           const isActive = pathname === item.href || (pathname.startsWith(item.href + '/') && item.href !== '/laporan');
           const Icon = item.icon;
           
