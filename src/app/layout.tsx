@@ -38,6 +38,15 @@ export default function RootLayout({
       <head>
         <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" />
         <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
+        
+        {/* PWA iOS */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="TokoKu Owner" />
+        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+
+        {/* PWA General */}
+        <meta name="mobile-web-app-capable" content="yes" />
       </head>
       {/* Perbaikan Responsif:
         Menggunakan h-[100dvh] (Dynamic Viewport Height) alih-alih h-screen

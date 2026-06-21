@@ -3,15 +3,26 @@
 import { prisma } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 
-export async function getExpenses(page: number = 1, limit: number = 20) {
+export async function getExpenses(page: number = 1, limit: number = 20, search?: string, category?: string) {
+  const whereClause: any = {};
+  
+  if (category && category !== 'all') {
+    whereClause.category = category;
+  }
+  
+  if (search) {
+    whereClause.notes = { contains: search, mode: 'insensitive' };
+  }
+
   const [expenses, totalCount] = await Promise.all([
     prisma.expense.findMany({
+      where: whereClause,
       orderBy: { date: 'desc' },
       include: { employee: true },
       skip: (page - 1) * limit,
       take: limit,
     }),
-    prisma.expense.count()
+    prisma.expense.count({ where: whereClause })
   ]);
 
   return { expenses, totalCount };

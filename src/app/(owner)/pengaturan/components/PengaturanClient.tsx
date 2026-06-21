@@ -5,6 +5,7 @@ import { createClient } from '@/app/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { ShieldCheck, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
+import { revalidateManifest } from '../actions';
 
 interface PengaturanClientProps {
   initialEmail: string;
@@ -98,6 +99,7 @@ export default function PengaturanClient({ initialEmail }: PengaturanClientProps
         updatedAt: new Date().toISOString()
       });
       if (error) throw error;
+      await revalidateManifest();
       success('Profil toko berhasil disimpan!');
     } catch (err: any) {
       toastError('Gagal menyimpan profil toko: ' + err.message);

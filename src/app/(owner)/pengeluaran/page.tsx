@@ -14,7 +14,10 @@ export default async function PengeluaranPage({
   const page = isNaN(pageParam) || pageParam < 1 ? 1 : pageParam;
   const limit = PAGE_SIZE.PENGELUARAN;
 
-  const { expenses, totalCount } = await getExpenses(page, limit);
+  const search = typeof resolvedParams.search === 'string' ? resolvedParams.search : '';
+  const category = typeof resolvedParams.category === 'string' ? resolvedParams.category : 'all';
+
+  const { expenses, totalCount } = await getExpenses(page, limit, search, category);
   const totalPages = Math.ceil(totalCount / limit);
 
   return (
@@ -24,6 +27,8 @@ export default async function PengeluaranPage({
       totalCount={totalCount}
       currentPage={page}
       limit={limit}
+      initialSearch={search}
+      initialCategory={category}
     />
   );
 }

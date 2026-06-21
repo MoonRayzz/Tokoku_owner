@@ -1,6 +1,8 @@
 import React from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import TopBar from '@/components/layout/TopBar';
+import { OfflineBanner } from '@/components/ui/OfflineBanner';
+import { InstallPrompt } from '@/components/pwa/InstallPrompt';
 
 export default function OwnerLayout({
   children,
@@ -8,7 +10,10 @@ export default function OwnerLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-[100dvh] w-full bg-background selection:bg-primary-container selection:text-white">
+    <>
+      <OfflineBanner />
+      <InstallPrompt />
+      <div className="flex min-h-[100dvh] w-full bg-background selection:bg-primary-container selection:text-white">
       {/* Sidebar untuk Desktop (hidden di mobile) */}
       <div className="hidden md:block w-[240px] flex-shrink-0">
         <Sidebar />
@@ -29,5 +34,6 @@ export default function OwnerLayout({
         </main>
       </div>
     </div>
+    </>
   );
 }

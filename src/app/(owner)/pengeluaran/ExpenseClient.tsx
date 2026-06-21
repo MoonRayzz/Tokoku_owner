@@ -5,8 +5,10 @@ import { addExpense, deleteExpense } from './actions';
 import { useToast } from '@/components/ui/Toast';
 import { format } from 'date-fns';
 import { id as localeId } from 'date-fns/locale';
-import { Trash2, PlusCircle, Filter } from 'lucide-react';
+import { Trash2, PlusCircle, Filter, Search, Download, X } from 'lucide-react';
 import Pagination from '@/components/ui/Pagination';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { useDebounce } from 'use-debounce';
 
 interface Expense {
   id: string;
@@ -25,6 +27,8 @@ interface ExpenseClientProps {
   totalCount: number;
   currentPage: number;
   limit: number;
+  initialSearch: string;
+  initialCategory: string;
 }
 
 const CATEGORIES = [
@@ -35,9 +39,76 @@ const CATEGORIES = [
   'LAINNYA'
 ];
 
-export default function ExpenseClient({ expenses, totalPages, totalCount, currentPage, limit }: ExpenseClientProps) {
+export default function ExpenseClient({ expenses, totalPages, totalCount, currentPage, limit, initialSearch, initialCategory }: ExpenseClientProps) {
   const [loading, setLoading] = useState(false);
   const toast = useToast();
+  
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const [searchQuery, setSearchQuery] = useState(initialSearch);
+  const [debouncedSearch] = useDebounce(searchQuery, 500);
+  const [categoryFilter, setCategoryFilter] = useState(initialCategory);
+
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportStartDate, setExportStartDate] = useState(new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().split('T')[0]);
+  const [exportEndDate, setExportEndDate] = useState(new Date().toISOString().split('T')[0]);
+
+  // Sync search and filter to URL
+  React.useEffect(() => {
+    const currentQuery = searchParams.toString();
+    const params = new URLSearchParams(currentQuery);
+    
+    if (debouncedSearch) {
+      params.set('search', debouncedSearch);
+      if (debouncedSearch !== initialSearch) params.set('page', '1');
+    } else {
+      params.delete('search');
+      if (debouncedSearch !== initialSearch) params.set('page', '1');
+    }
+
+    if (categoryFilter !== 'all') {
+      params.set('category', categoryFilter);
+      if (categoryFilter !== initialCategory) params.set('page', '1');
+    } else {
+      params.delete('category');
+      if (categoryFilter !== initialCategory) params.set('page', '1');
+    }
+    
+    const newQuery = params.toString();
+    if (currentQuery !== newQuery) {
+      router.replace(`${pathname}?${newQuery}`, { scroll: false });
+    }
+  }, [debouncedSearch, categoryFilter, pathname, router, searchParams, initialSearch, initialCategory]);
+
+  const handleExportExcel = async () => {
+    try {
+      setIsExporting(true);
+      const url = new URL('/api/export/pengeluaran', window.location.origin);
+      url.searchParams.set('startDate', exportStartDate);
+      url.searchParams.set('endDate', exportEndDate);
+
+      const response = await fetch(url.toString());
+      if (!response.ok) throw new Error('Gagal mengunduh data');
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.setAttribute('download', `Laporan_Pengeluaran_${new Date().toISOString().split('T')[0]}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setShowExportModal(false);
+    } catch (error) {
+      console.error(error);
+      toast.error('Gagal mengekspor data Excel');
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const handleAdd = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -136,11 +207,40 @@ export default function ExpenseClient({ expenses, totalPages, totalCount, curren
         {/* Tabel Data */}
         <div className="lg:col-span-2">
           <div className="bg-surface border border-border rounded-xl overflow-hidden shadow-sm flex flex-col h-full">
-            <div className="p-5 border-b border-border flex justify-between items-center bg-surface-container-high/30">
+            <div className="p-5 border-b border-border flex flex-col md:flex-row justify-between items-start md:items-center bg-surface-container-high/30 gap-4">
               <h3 className="font-semibold text-text-primary flex items-center gap-2">
                 <Filter size={18} className="text-text-secondary" />
                 Semua Riwayat
               </h3>
+              
+              <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                <div className="relative flex-1 min-w-[200px]">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={16} />
+                  <input 
+                    className="w-full bg-background border border-border focus:border-primary-container focus:ring-1 focus:ring-primary-container text-sm rounded-lg pl-9 h-9 transition-all text-text-primary outline-none" 
+                    placeholder="Cari keterangan..." 
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                  />
+                </div>
+                <select 
+                  className="bg-background border border-border focus:border-primary-container focus:ring-1 focus:ring-primary-container text-sm rounded-lg h-9 px-3 text-text-primary outline-none"
+                  value={categoryFilter}
+                  onChange={e => setCategoryFilter(e.target.value)}
+                >
+                  <option value="all">Semua Kategori</option>
+                  {CATEGORIES.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+                <button 
+                  onClick={() => setShowExportModal(true)}
+                  className="flex items-center h-9 px-4 bg-surface border border-border text-text-secondary rounded-lg hover:bg-surface-container transition-colors text-sm font-medium"
+                >
+                  <Download size={16} className="mr-2" />
+                  Export
+                </button>
+              </div>
             </div>
 
             <div className="flex-1 overflow-x-auto">
@@ -201,6 +301,61 @@ export default function ExpenseClient({ expenses, totalPages, totalCount, curren
         </div>
 
       </div>
+
+      {/* Modal Filter Export */}
+      {showExportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-surface border border-border rounded-xl w-full max-w-md overflow-hidden flex flex-col shadow-2xl">
+            <div className="flex justify-between items-center p-6 border-b border-border bg-surface-container/30">
+              <h2 className="text-xl font-bold text-text-primary">Export Excel Pengeluaran</h2>
+              <button onClick={() => setShowExportModal(false)} className="text-text-secondary hover:text-text-primary">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-text-secondary mb-4">Pilih rentang tanggal untuk mengunduh laporan pengeluaran toko.</p>
+              
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Dari Tanggal</label>
+                <input 
+                  type="date" 
+                  value={exportStartDate}
+                  onChange={(e) => setExportStartDate(e.target.value)}
+                  className="w-full bg-background border border-border rounded-lg px-4 py-2.5 text-text-primary focus:outline-none focus:border-primary-container/50 transition-colors"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Sampai Tanggal</label>
+                <input 
+                  type="date" 
+                  value={exportEndDate}
+                  onChange={(e) => setExportEndDate(e.target.value)}
+                  className="w-full bg-background border border-border rounded-lg px-4 py-2.5 text-text-primary focus:outline-none focus:border-primary-container/50 transition-colors"
+                />
+              </div>
+            </div>
+            <div className="p-6 border-t border-border bg-surface-container/30 flex justify-end gap-3">
+              <button 
+                onClick={() => setShowExportModal(false)}
+                className="px-6 py-2 rounded-lg font-semibold text-text-secondary hover:bg-surface-container transition-colors"
+              >
+                Batal
+              </button>
+              <button 
+                onClick={handleExportExcel}
+                disabled={isExporting}
+                className="px-6 py-2 bg-primary-container text-on-primary-fixed rounded-lg font-bold hover:brightness-110 transition-all flex items-center justify-center min-w-[120px] disabled:opacity-50"
+              >
+                {isExporting ? (
+                  <span className="material-symbols-outlined animate-spin text-[20px]">sync</span>
+                ) : (
+                  'Download Excel'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
