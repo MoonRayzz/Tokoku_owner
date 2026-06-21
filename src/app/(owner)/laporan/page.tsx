@@ -1,5 +1,6 @@
 import React from 'react';
 import { prisma } from '@/lib/db';
+import { Prisma } from '@prisma/client';
 import { format, subDays, startOfDay, endOfDay } from 'date-fns';
 import { id } from 'date-fns/locale';
 import { 
@@ -13,6 +14,8 @@ import {
   TrendingUp
 } from 'lucide-react';
 import Link from 'next/link';
+import Pagination from '@/components/ui/Pagination';
+import { PAGE_SIZE } from '@/lib/constants';
 
 // Helper: Menghitung persentase tren
 function getTrend(current: number, previous: number) {
@@ -32,7 +35,7 @@ export default async function LaporanPage({
   
   const pageParam = typeof resolvedParams.page === 'string' ? parseInt(resolvedParams.page) : 1;
   const page = isNaN(pageParam) || pageParam < 1 ? 1 : pageParam;
-  const limit = 20;
+  const limit = PAGE_SIZE.TRANSAKSI;
 
   const now = new Date();
   const todayStr = format(now, 'yyyy-MM-dd');
@@ -44,11 +47,18 @@ export default async function LaporanPage({
   // Ambil daftar shift untuk filter
   const shifts = await prisma.shift.findMany({ where: { isActive: true } });
 
-  const whereClause = {
-    createdAt: { gte: startDate, lte: endDate },
+  const whereClause: any = {
+    createdAt: {
+      gte: startDate,
+      lte: endDate,
+    },
     isVoid: false,
     ...(shiftParam ? { shiftId: shiftParam } : {})
   };
+
+  if (typeof resolvedParams.member === 'string' && resolvedParams.member.trim() !== '') {
+    whereClause.memberId = resolvedParams.member;
+  }
 
   // Optimasi: Hitung total menggunakan aggregate, bukan fetch semua data (Meringankan memori)
   const aggregate = await prisma.transaction.aggregate({
@@ -71,20 +81,28 @@ export default async function LaporanPage({
   const totalExpense = expenseAggregate._sum.amount || 0;
 
   // Laba Bersih
-  // Harus ambil details untuk hitung HPP
-  const allTxForProfit = await prisma.transaction.findMany({
-    where: whereClause,
-    include: { details: true }
-  });
-  const totalHpp = allTxForProfit.reduce((sum, tx) => {
-    return sum + tx.details.reduce((ds, d) => ds + ((d.priceBuyAtTime || 0) * d.quantity), 0);
-  }, 0);
+  // Hitung HPP dengan query SQL langsung untuk menghindari fetch semua detail
+  const conditions = [Prisma.sql`t."createdAt" >= ${startDate}`, Prisma.sql`t."createdAt" <= ${endDate}`, Prisma.sql`t."isVoid" = false`];
+  if (shiftParam) conditions.push(Prisma.sql`t."shiftId" = ${shiftParam}`);
+  if (whereClause.memberId) conditions.push(Prisma.sql`t."memberId" = ${whereClause.memberId}`);
+
+  const hppQuery = Prisma.sql`
+    SELECT SUM(COALESCE(td."priceBuyAtTime", 0) * td."quantity") as "totalHpp"
+    FROM "TransactionDetail" td
+    JOIN "Transaction" t ON t."id" = td."transactionId"
+    WHERE ${Prisma.join(conditions, ' AND ')}
+  `;
+  const hppResult: any[] = await prisma.$queryRaw(hppQuery);
+  const totalHpp = Number(hppResult[0]?.totalHpp || 0);
 
   const netProfit = totalSales - totalHpp - totalExpense;
 
   // Nilai Inventori (Modal Mengendap)
-  const allProducts = await prisma.product.findMany({ select: { stock: true, priceBuy: true } });
-  const totalInventoryValue = allProducts.reduce((sum, p) => sum + (p.stock * (p.priceBuy || 0)), 0);
+  const inventoryResult: any[] = await prisma.$queryRaw`
+    SELECT SUM("stock" * COALESCE("priceBuy", 0)) as "totalValue"
+    FROM "Product"
+  `;
+  const totalInventoryValue = Number(inventoryResult[0]?.totalValue || 0);
   
   // Data transaksi untuk tabel (di-paginate)
   const transactions = await prisma.transaction.findMany({
@@ -112,6 +130,22 @@ export default async function LaporanPage({
         <h2 className="text-2xl font-bold text-text-primary">Laporan Penjualan</h2>
         <p className="text-sm text-text-secondary mt-1">Analisis dan ekspor data transaksi toko Anda</p>
       </section>
+
+      {/* Tabs Navigasi Laporan */}
+      <div className="flex border-b border-border mb-6">
+        <Link 
+          href="/laporan" 
+          className="px-4 py-2 border-b-2 border-primary-container text-primary-container font-medium text-sm"
+        >
+          Laporan Transaksi Umum
+        </Link>
+        <Link 
+          href="/laporan/analitik" 
+          className="px-4 py-2 border-b-2 border-transparent text-text-secondary hover:text-text-primary font-medium text-sm transition-colors"
+        >
+          Analitik Produk Terlaris
+        </Link>
+      </div>
 
       {/* Filter & Export Bar */}
       <section className="bg-surface border border-border rounded-xl p-4 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 shadow-sm">
@@ -310,32 +344,12 @@ export default async function LaporanPage({
         </div>
         
         {/* Pagination UI */}
-        {totalPages > 1 && (
-          <div className="p-4 border-t border-border flex justify-between items-center bg-surface">
-            <span className="text-sm text-text-secondary font-medium">
-              Menampilkan {(page - 1) * limit + 1} - {Math.min(page * limit, totalCount)} dari {totalCount} transaksi
-            </span>
-            <div className="flex gap-2">
-              <Link 
-                href={`/laporan?start=${startParam}&end=${endParam}&shift=${shiftParam}&page=${page > 1 ? page - 1 : 1}`}
-                className={`px-3 py-1.5 rounded border text-sm transition-colors flex items-center ${page <= 1 ? 'border-border/50 text-text-secondary/50 pointer-events-none' : 'border-border text-text-primary hover:bg-surface-container'}`}
-              >
-                Sebelumnya
-              </Link>
-              
-              <div className="px-3 py-1.5 rounded bg-surface-container text-text-primary text-sm font-semibold border border-border">
-                {page} / {totalPages}
-              </div>
-
-              <Link 
-                href={`/laporan?start=${startParam}&end=${endParam}&shift=${shiftParam}&page=${page < totalPages ? page + 1 : totalPages}`}
-                className={`px-3 py-1.5 rounded border text-sm transition-colors flex items-center ${page >= totalPages ? 'border-border/50 text-text-secondary/50 pointer-events-none' : 'border-border text-text-primary hover:bg-surface-container'}`}
-              >
-                Selanjutnya
-              </Link>
-            </div>
-          </div>
-        )}
+        <Pagination 
+          totalPages={totalPages} 
+          totalItems={totalCount} 
+          currentPage={page} 
+          pageSize={limit} 
+        />
       </section>
     </div>
   );

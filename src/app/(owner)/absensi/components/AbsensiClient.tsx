@@ -9,6 +9,7 @@ import { saveEmployee, saveShift } from '../actions';
 import QRGenerator from './QRGenerator';
 import { useToast } from '@/components/ui/Toast';
 import RekapGajiClient from './RekapGajiClient';
+import Pagination from '@/components/ui/Pagination';
 
 interface AttendanceWithRelations extends Attendance {
   employee: Employee;
@@ -19,9 +20,13 @@ interface AbsensiClientProps {
   attendances: AttendanceWithRelations[];
   employees: Employee[];
   shifts: Shift[];
+  totalPages: number;
+  totalCount: number;
+  currentPage: number;
+  limit: number;
 }
 
-export default function AbsensiClient({ attendances, employees, shifts }: AbsensiClientProps) {
+export default function AbsensiClient({ attendances, employees, shifts, totalPages, totalCount, currentPage, limit }: AbsensiClientProps) {
   const [activeTab, setActiveTab] = useState<'riwayat' | 'karyawan' | 'shift' | 'rekap'>('riwayat');
   const [isEmpModalOpen, setIsEmpModalOpen] = useState(false);
   const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
@@ -192,6 +197,12 @@ export default function AbsensiClient({ attendances, employees, shifts }: Absens
               </tbody>
             </table>
           </div>
+          <Pagination 
+            totalPages={totalPages} 
+            totalItems={totalCount} 
+            currentPage={currentPage} 
+            pageSize={limit} 
+          />
           </div>
         </div>
       )}

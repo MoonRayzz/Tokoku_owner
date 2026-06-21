@@ -1,5 +1,6 @@
 import React from 'react';
 import { prisma } from '@/lib/db';
+import { Prisma } from '@prisma/client';
 import { startOfDay, endOfDay, subDays, format } from 'date-fns';
 import { id } from 'date-fns/locale';
 import StatCard from '@/components/ui/StatCard';
@@ -25,56 +26,55 @@ export default async function DashboardPage() {
   const yesterdayStart = startOfDay(subDays(now, 1));
   const yesterdayEnd = endOfDay(subDays(now, 1));
 
-  // Transaksi hari ini
-  const todayTx = await prisma.transaction.findMany({
-    where: {
-      createdAt: { gte: todayStart, lte: todayEnd },
-      isVoid: false,
-    },
-    include: { details: true }
-  });
+  // Aggregasi untuk hari ini dan kemarin
+  const [
+    todayTxAgg,
+    yesterdayTxAgg,
+    todayExpenseAgg,
+    yesterdayExpenseAgg,
+    todayHppResult,
+    yesterdayHppResult
+  ] = await Promise.all([
+    prisma.transaction.aggregate({
+      where: { createdAt: { gte: todayStart, lte: todayEnd }, isVoid: false },
+      _sum: { totalAmount: true },
+      _count: { id: true }
+    }),
+    prisma.transaction.aggregate({
+      where: { createdAt: { gte: yesterdayStart, lte: yesterdayEnd }, isVoid: false },
+      _sum: { totalAmount: true },
+      _count: { id: true }
+    }),
+    prisma.expense.aggregate({
+      where: { date: { gte: todayStart, lte: todayEnd } },
+      _sum: { amount: true }
+    }),
+    prisma.expense.aggregate({
+      where: { date: { gte: yesterdayStart, lte: yesterdayEnd } },
+      _sum: { amount: true }
+    }),
+    prisma.$queryRaw<any[]>`SELECT SUM(COALESCE(td."priceBuyAtTime", 0) * td."quantity") as hpp FROM "TransactionDetail" td JOIN "Transaction" t ON t.id = td."transactionId" WHERE t."createdAt" >= ${todayStart} AND t."createdAt" <= ${todayEnd} AND t."isVoid" = false`,
+    prisma.$queryRaw<any[]>`SELECT SUM(COALESCE(td."priceBuyAtTime", 0) * td."quantity") as hpp FROM "TransactionDetail" td JOIN "Transaction" t ON t.id = td."transactionId" WHERE t."createdAt" >= ${yesterdayStart} AND t."createdAt" <= ${yesterdayEnd} AND t."isVoid" = false`
+  ]);
 
-  const totalSales = todayTx.reduce((sum, t) => sum + t.totalAmount, 0);
-  const txCount = todayTx.length;
+  const totalSales = todayTxAgg._sum.totalAmount || 0;
+  const txCount = todayTxAgg._count.id;
   const avgOrder = txCount > 0 ? totalSales / txCount : 0;
 
-  // Transaksi kemarin (untuk trend)
-  const yesterdayTx = await prisma.transaction.findMany({
-    where: {
-      createdAt: { gte: yesterdayStart, lte: yesterdayEnd },
-      isVoid: false,
-    },
-    include: { details: true }
-  });
+  const yesterdaySales = yesterdayTxAgg._sum.totalAmount || 0;
+  const yesterdayCount = yesterdayTxAgg._count.id;
 
-  const yesterdaySales = yesterdayTx.reduce((sum, t) => sum + t.totalAmount, 0);
+  const totalExpense = todayExpenseAgg._sum.amount || 0;
+  const yesterdayTotalExpense = yesterdayExpenseAgg._sum.amount || 0;
 
-  // Pengeluaran Hari Ini & Kemarin
-  const todayExpense = await prisma.expense.findMany({
-    where: { date: { gte: todayStart, lte: todayEnd } }
-  });
-  const totalExpense = todayExpense.reduce((sum, e) => sum + e.amount, 0);
-
-  const yesterdayExpense = await prisma.expense.findMany({
-    where: { date: { gte: yesterdayStart, lte: yesterdayEnd } }
-  });
-  const yesterdayTotalExpense = yesterdayExpense.reduce((sum, e) => sum + e.amount, 0);
-
-  // Kalkulasi HPP (Harga Pokok Penjualan)
-  const todayHpp = todayTx.reduce((sum, tx) => {
-    return sum + tx.details.reduce((ds, d) => ds + ((d.priceBuyAtTime || 0) * d.quantity), 0);
-  }, 0);
-
-  const yesterdayHpp = yesterdayTx.reduce((sum, tx) => {
-    return sum + tx.details.reduce((ds, d) => ds + ((d.priceBuyAtTime || 0) * d.quantity), 0);
-  }, 0);
+  const todayHpp = Number(todayHppResult[0]?.hpp || 0);
+  const yesterdayHpp = Number(yesterdayHppResult[0]?.hpp || 0);
 
   const netProfit = totalSales - todayHpp - totalExpense;
   const yesterdayNetProfit = yesterdaySales - yesterdayHpp - yesterdayTotalExpense;
   
   const profitTrend = yesterdayNetProfit === 0 ? (netProfit > 0 ? 100 : 0) : ((netProfit - yesterdayNetProfit) / Math.abs(yesterdayNetProfit)) * 100;
   const expenseTrend = yesterdayTotalExpense === 0 ? (totalExpense > 0 ? 100 : 0) : ((totalExpense - yesterdayTotalExpense) / yesterdayTotalExpense) * 100;
-  const yesterdayCount = yesterdayTx.length;
   
   const salesTrend = yesterdaySales === 0 ? 100 : ((totalSales - yesterdaySales) / yesterdaySales) * 100;
   const countTrend = txCount - yesterdayCount;
@@ -82,36 +82,92 @@ export default async function DashboardPage() {
   // Member
   const memberCount = await prisma.member.count();
 
-  // Stok Menipis
-  const lowStock = await prisma.product.findMany({
-    where: {
-      stock: { lte: prisma.product.fields.minStockAlert } // Prisma > 5.0 supports field reference, but let's do a safe raw query or just fetch all and filter if it's too complex.
-      // Wait, field reference is supported in Prisma 5 via `lte: prisma.product.fields.minStockAlert`. But to be completely safe in older versions, we can just fetch items with low stock absolute number or use a simpler where condition. Since I don't know the exact Prisma version feature set active, I will just fetch items where stock <= minStockAlert. Let's write a safe query:
-    }
-  });
-  // Wait, Prisma doesn't directly support comparing two columns in a `where` clause easily without raw queries or specific preview features.
-  // Let me just fetch products where stock < 10 for simplicity, or fetch all and filter in memory since we are in MVP phase. I will fetch all and filter.
-  const allProducts = await prisma.product.findMany();
-  const actualLowStock = allProducts.filter(p => p.stock <= p.minStockAlert).slice(0, 5);
+  // Proyeksi Stok (Habis < 7 Hari)
+  // Menghitung rata-rata penjualan 7 hari terakhir per produk
+  const sevenDaysAgo = startOfDay(subDays(now, 7));
+  
+  const productSalesAgg: any[] = await prisma.$queryRaw`
+    SELECT 
+      p.id, 
+      p.name, 
+      p.stock,
+      p.sku,
+      COALESCE(SUM(td.quantity), 0) as "totalSold7Days"
+    FROM "Product" p
+    LEFT JOIN "TransactionDetail" td ON td."productId" = p.id
+    LEFT JOIN "Transaction" t ON t.id = td."transactionId" AND t."createdAt" >= ${sevenDaysAgo} AND t."isVoid" = false
+    WHERE p.stock > 0
+    GROUP BY p.id
+  `;
+
+  // Find products that will run out in < 7 days
+  let projectedOutProducts = productSalesAgg
+    .map(p => {
+      const totalSold = Number(p.totalSold7Days);
+      const avgDailySales = totalSold / 7;
+      const daysLeft = avgDailySales > 0 ? p.stock / avgDailySales : Infinity;
+      return {
+        id: p.id,
+        name: p.name,
+        stock: p.stock,
+        sku: p.sku,
+        avgDailySales,
+        daysLeft,
+        trendData: [] as number[] // Akan diisi nanti
+      };
+    })
+    .filter(p => p.daysLeft < 7 && p.avgDailySales > 0)
+    .sort((a, b) => a.daysLeft - b.daysLeft)
+    .slice(0, 5); // Ambil Top 5 paling kritis
+
+  // Jika ada produk yang masuk daftar kritis, fetch data hariannya untuk Sparkline
+  if (projectedOutProducts.length > 0) {
+    const productIds = projectedOutProducts.map(p => p.id);
+    
+    // Ambil data per hari untuk 7 hari terakhir
+    const trendRows: any[] = await prisma.$queryRaw`
+      SELECT 
+        td."productId",
+        DATE_TRUNC('day', t."createdAt") as "day",
+        SUM(td.quantity) as "dailyQty"
+      FROM "TransactionDetail" td
+      JOIN "Transaction" t ON t.id = td."transactionId"
+      WHERE td."productId" IN (${Prisma.join(productIds)})
+        AND t."createdAt" >= ${sevenDaysAgo}
+        AND t."isVoid" = false
+      GROUP BY td."productId", DATE_TRUNC('day', t."createdAt")
+    `;
+
+    // Susun data per hari (7 elemen untuk 7 hari)
+    projectedOutProducts = projectedOutProducts.map(p => {
+      const trendData = [];
+      for (let i = 6; i >= 0; i--) {
+        const targetDayStr = format(startOfDay(subDays(now, i)), 'yyyy-MM-dd');
+        // Cari di row
+        const row = trendRows.find(r => r.productId === p.id && format(new Date(r.day), 'yyyy-MM-dd') === targetDayStr);
+        trendData.push(row ? Number(row.dailyQty) : 0);
+      }
+      return { ...p, trendData };
+    });
+  }
 
   // Data 7 hari untuk chart
+  const chartSalesRaw: any[] = await prisma.$queryRaw`
+    SELECT DATE_TRUNC('day', "createdAt") as day, SUM("totalAmount") as amount
+    FROM "Transaction"
+    WHERE "createdAt" >= ${sevenDaysAgo} AND "createdAt" <= ${todayEnd} AND "isVoid" = false
+    GROUP BY DATE_TRUNC('day', "createdAt")
+  `;
+
   const chartData = [];
   for (let i = 6; i >= 0; i--) {
     const date = subDays(now, i);
-    const dayStart = startOfDay(date);
-    const dayEnd = endOfDay(date);
+    const dayStr = format(date, 'yyyy-MM-dd');
+    const row = chartSalesRaw.find(r => format(new Date(r.day), 'yyyy-MM-dd') === dayStr);
     
-    const dayTx = await prisma.transaction.findMany({
-      where: {
-        createdAt: { gte: dayStart, lte: dayEnd },
-        isVoid: false,
-      }
-    });
-    
-    const dayAmount = dayTx.reduce((sum, t) => sum + t.totalAmount, 0);
     chartData.push({
       date: format(date, 'd MMM', { locale: id }),
-      amount: dayAmount
+      amount: row ? Number(row.amount) : 0
     });
   }
 
@@ -134,21 +190,22 @@ export default async function DashboardPage() {
     terminalStatus = { color: 'bg-danger', label: 'Terminal Offline', pingText: `Tidak ada respons > 3 jam` };
   }
 
-  // Top Products (Aggregasi in-memory untuk hari ini)
-  const productSales: Record<string, { name: string; quantity: number }> = {};
-  todayTx.forEach(tx => {
-    tx.details.forEach(d => {
-      if (!productSales[d.productId]) {
-        const prod = allProducts.find(p => p.id === d.productId);
-        productSales[d.productId] = { name: prod?.name || 'Unknown', quantity: 0 };
-      }
-      productSales[d.productId].quantity += d.quantity;
-    });
-  });
+  // Top Products (Aggregasi in-memory untuk hari ini diganti dengan SQL)
+  const topProductsRaw: any[] = await prisma.$queryRaw`
+    SELECT p.name, SUM(td.quantity) as quantity
+    FROM "TransactionDetail" td
+    JOIN "Transaction" t ON t.id = td."transactionId"
+    JOIN "Product" p ON p.id = td."productId"
+    WHERE t."createdAt" >= ${todayStart} AND t."createdAt" <= ${todayEnd} AND t."isVoid" = false
+    GROUP BY p.id, p.name
+    ORDER BY quantity DESC
+    LIMIT 5
+  `;
 
-  const topProducts = Object.values(productSales)
-    .sort((a, b) => b.quantity - a.quantity)
-    .slice(0, 5);
+  const topProducts = topProductsRaw.map(p => ({
+    name: p.name,
+    quantity: Number(p.quantity)
+  }));
 
   const formattedDate = format(now, 'EEEE, dd MMMM yyyy', { locale: id });
 
@@ -261,39 +318,84 @@ export default async function DashboardPage() {
       </div>
 
       {/* Bottom Row: Alert / Table Stok */}
-      <div className="bg-surface border border-border rounded-xl overflow-hidden border-l-[3px] border-l-warning">
+      <div className="bg-surface border border-border rounded-xl overflow-hidden border-l-[3px] border-l-warning shadow-sm">
         <div className="px-6 py-4 border-b border-border flex items-center gap-3 bg-warning/5">
           <AlertTriangle className="text-warning" size={20} />
-          <h3 className="text-lg font-semibold text-text-primary">Stok Menipis — Perlu Segera Direstok</h3>
+          <h3 className="text-lg font-semibold text-text-primary">Warning: Proyeksi Stok Habis &lt; 7 Hari</h3>
         </div>
         <div className="overflow-x-auto w-full">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-surface-container-high border-b border-border text-[11px] font-semibold text-text-secondary uppercase tracking-wider">
                 <th className="px-6 py-3">Nama Produk</th>
-                <th className="px-6 py-3">Stok Tersisa</th>
-                <th className="px-6 py-3">Minimum Stok</th>
+                <th className="px-6 py-3 text-right">Stok Tersisa</th>
+                <th className="px-6 py-3 text-right">Rata Penjualan/Hari</th>
+                <th className="px-6 py-3 text-center">Estimasi Habis</th>
+                <th className="px-6 py-3 text-center w-32">Tren 7 Hari</th>
                 <th className="px-6 py-3 text-right">Aksi</th>
               </tr>
             </thead>
             <tbody className="text-sm divide-y divide-border">
-              {actualLowStock.length === 0 ? (
+              {projectedOutProducts.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-6 py-4 text-center text-text-secondary">Semua stok produk aman.</td>
+                  <td colSpan={6} className="px-6 py-8 text-center text-text-secondary">Semua stok produk diproyeksikan aman untuk 7 hari ke depan.</td>
                 </tr>
               ) : (
-                actualLowStock.map((p) => (
-                  <tr key={p.id} className="hover:bg-surface-container-highest transition-colors group">
-                    <td className="px-6 py-4 text-text-primary font-medium">{p.name}</td>
-                    <td className="px-6 py-4 text-error font-bold">{p.stock} Pcs</td>
-                    <td className="px-6 py-4 text-text-secondary">{p.minStockAlert} Pcs</td>
-                    <td className="px-6 py-4 text-right">
-                      <Link href="/produk" className="text-text-secondary group-hover:text-primary-container border border-transparent group-hover:border-border px-3 py-1.5 rounded-md transition-all">
-                        Lihat Produk
-                      </Link>
-                    </td>
-                  </tr>
-                ))
+                projectedOutProducts.map((p) => {
+                  // Generate Simple SVG Sparkline
+                  const maxTrend = Math.max(...p.trendData, 1);
+                  const minTrend = 0;
+                  const sparklinePoints = p.trendData.map((val, idx) => {
+                    const x = (idx / 6) * 100;
+                    const y = 30 - ((val - minTrend) / (maxTrend - minTrend)) * 30;
+                    return `${x},${y}`;
+                  }).join(' ');
+
+                  return (
+                    <tr key={p.id} className="hover:bg-surface-container-highest transition-colors group">
+                      <td className="px-6 py-4">
+                        <div className="font-bold text-text-primary">{p.name}</div>
+                        <div className="text-[11px] text-text-secondary">SKU: {p.sku}</div>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className="bg-error/10 text-error px-2 py-1 rounded-md font-bold text-xs">{p.stock} Pcs</span>
+                      </td>
+                      <td className="px-6 py-4 text-right font-medium text-text-secondary">
+                        {p.avgDailySales.toFixed(1)} / hari
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <span className="font-bold text-text-primary">{Math.max(0, Math.ceil(p.daysLeft))}</span>
+                          <span className="text-xs text-text-secondary">Hari</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <svg className="w-24 h-8 overflow-visible" viewBox="0 0 100 30" preserveAspectRatio="none">
+                          <polyline 
+                            fill="none" 
+                            stroke="#eab308" 
+                            strokeWidth="2" 
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            points={sparklinePoints} 
+                          />
+                          {p.trendData.map((val, idx) => {
+                            const x = (idx / 6) * 100;
+                            const y = 30 - ((val - minTrend) / (maxTrend - minTrend)) * 30;
+                            return (
+                              <circle key={idx} cx={x} cy={y} r="2" fill="#eab308" />
+                            );
+                          })}
+                        </svg>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <Link href={`/produk/edit/${p.id}`} className="text-text-secondary group-hover:text-primary-container border border-transparent group-hover:border-border px-3 py-1.5 rounded-md transition-all">
+                          Restok
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

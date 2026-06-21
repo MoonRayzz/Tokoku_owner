@@ -3,6 +3,8 @@
 import React, { useState, useMemo } from 'react';
 import { ShieldAlert, AlertCircle, Download, Calendar as CalendarIcon, Filter } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import Pagination from '@/components/ui/Pagination';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 
 function formatRp(n: number) {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
@@ -14,9 +16,13 @@ function formatDate(d: string | Date) {
 
 interface AuditVoidClientProps {
   voidLogs: any[];
+  totalPages: number;
+  totalCount: number;
+  currentPage: number;
+  limit: number;
 }
 
-export default function AuditVoidClient({ voidLogs }: AuditVoidClientProps) {
+export default function AuditVoidClient({ voidLogs, totalPages, totalCount, currentPage, limit }: AuditVoidClientProps) {
   const [filterReason, setFilterReason] = useState('ALL');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -202,6 +208,12 @@ export default function AuditVoidClient({ voidLogs }: AuditVoidClientProps) {
               </tbody>
             </table>
           </div>
+          <Pagination 
+            totalPages={totalPages} 
+            totalItems={totalCount} 
+            currentPage={currentPage} 
+            pageSize={limit} 
+          />
         </div>
 
       </div>

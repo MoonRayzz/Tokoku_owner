@@ -13,39 +13,60 @@ import {
 } from 'lucide-react';
 import { updateProduct } from '../actions';
 import { useToast } from '@/components/ui/Toast';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import Pagination from '@/components/ui/Pagination';
+import { useDebounce } from 'use-debounce';
 
 type ProductWithLogs = Product & { StockLog: StockLog[] };
 
 interface ProductClientProps {
   products: ProductWithLogs[];
+  totalPages: number;
+  totalCount: number;
+  currentPage: number;
+  limit: number;
+  initialSearch: string;
 }
 
-export default function ProductClient({ products }: ProductClientProps) {
-  const [searchQuery, setSearchQuery] = useState('');
+export default function ProductClient({ products, totalPages, totalCount, currentPage, limit, initialSearch }: ProductClientProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const [searchQuery, setSearchQuery] = useState(initialSearch);
+  const [debouncedSearch] = useDebounce(searchQuery, 500);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductWithLogs | null>(null);
-  const [historyProduct, setHistoryProduct] = useState<ProductWithLogs | null>(null);
   const [loading, setLoading] = useState(false);
   const toast = useToast();
 
-  // Export Modal State
   const [showExportModal, setShowExportModal] = useState(false);
-  const [exportStartDate, setExportStartDate] = useState(() => {
-    const d = new Date();
-    d.setMonth(d.getMonth() - 1);
-    return d.toISOString().split('T')[0];
-  });
-  const [exportEndDate, setExportEndDate] = useState(() => {
-    return new Date().toISOString().split('T')[0];
-  });
   const [isExporting, setIsExporting] = useState(false);
+  const [exportStartDate, setExportStartDate] = useState(new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().split('T')[0]);
+  const [exportEndDate, setExportEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [historyProduct, setHistoryProduct] = useState<ProductWithLogs | null>(null);
 
-  const filteredProducts = useMemo(() => {
-    return products.filter(p => 
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      p.sku.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [products, searchQuery]);
+  // Sync search query to URL when debouncedSearch changes
+  React.useEffect(() => {
+    const currentQuery = searchParams.toString();
+    const params = new URLSearchParams(currentQuery);
+    
+    if (debouncedSearch) {
+      params.set('search', debouncedSearch);
+      if (debouncedSearch !== initialSearch) params.set('page', '1');
+    } else {
+      params.delete('search');
+      if (debouncedSearch !== initialSearch) params.set('page', '1');
+    }
+    
+    const newQuery = params.toString();
+    if (currentQuery !== newQuery) {
+      router.replace(`${pathname}?${newQuery}`, { scroll: false });
+    }
+  }, [debouncedSearch, pathname, router, searchParams, initialSearch]);
+
+  const filteredProducts = products; // Data sudah di-filter dari server
 
   const handleOpenModal = (product: ProductWithLogs) => {
     setEditingProduct(product);
@@ -224,6 +245,12 @@ export default function ProductClient({ products }: ProductClientProps) {
             </tbody>
           </table>
         </div>
+        <Pagination 
+          totalPages={totalPages} 
+          totalItems={totalCount} 
+          currentPage={currentPage} 
+          pageSize={limit} 
+        />
       </div>
 
       {/* Modal Form Edit Produk */}

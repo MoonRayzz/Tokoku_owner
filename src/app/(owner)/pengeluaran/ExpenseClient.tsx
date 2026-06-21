@@ -6,6 +6,7 @@ import { useToast } from '@/components/ui/Toast';
 import { format } from 'date-fns';
 import { id as localeId } from 'date-fns/locale';
 import { Trash2, PlusCircle, Filter } from 'lucide-react';
+import Pagination from '@/components/ui/Pagination';
 
 interface Expense {
   id: string;
@@ -20,6 +21,10 @@ interface Expense {
 
 interface ExpenseClientProps {
   expenses: Expense[];
+  totalPages: number;
+  totalCount: number;
+  currentPage: number;
+  limit: number;
 }
 
 const CATEGORIES = [
@@ -30,7 +35,7 @@ const CATEGORIES = [
   'LAINNYA'
 ];
 
-export default function ExpenseClient({ expenses }: ExpenseClientProps) {
+export default function ExpenseClient({ expenses, totalPages, totalCount, currentPage, limit }: ExpenseClientProps) {
   const [loading, setLoading] = useState(false);
   const toast = useToast();
 
@@ -186,6 +191,12 @@ export default function ExpenseClient({ expenses }: ExpenseClientProps) {
                 </tbody>
               </table>
             </div>
+            <Pagination 
+              totalPages={totalPages} 
+              totalItems={totalCount} 
+              currentPage={currentPage} 
+              pageSize={limit} 
+            />
           </div>
         </div>
 

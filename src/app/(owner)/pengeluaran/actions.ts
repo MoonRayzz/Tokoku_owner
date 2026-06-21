@@ -3,11 +3,18 @@
 import { prisma } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 
-export async function getExpenses() {
-  return await prisma.expense.findMany({
-    orderBy: { date: 'desc' },
-    include: { employee: true }
-  });
+export async function getExpenses(page: number = 1, limit: number = 20) {
+  const [expenses, totalCount] = await Promise.all([
+    prisma.expense.findMany({
+      orderBy: { date: 'desc' },
+      include: { employee: true },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.expense.count()
+  ]);
+
+  return { expenses, totalCount };
 }
 
 export async function addExpense(formData: FormData) {
