@@ -25,6 +25,7 @@ export default function PengaturanClient({ initialEmail }: PengaturanClientProps
   const [storeLatitude, setStoreLatitude] = useState('');
   const [storeLongitude, setStoreLongitude] = useState('');
   const [storeRadius, setStoreRadius] = useState(50);
+  const [voidPin, setVoidPin] = useState('123456');
   const [isSavingStore, setIsSavingStore] = useState(false);
 
   // Status State
@@ -50,6 +51,7 @@ export default function PengaturanClient({ initialEmail }: PengaturanClientProps
         setStoreLatitude(data.latitude !== null ? String(data.latitude) : '');
         setStoreLongitude(data.longitude !== null ? String(data.longitude) : '');
         setStoreRadius(data.radius || 50);
+        setVoidPin(data.voidPin || '123456');
       }
     }
     
@@ -92,6 +94,7 @@ export default function PengaturanClient({ initialEmail }: PengaturanClientProps
         latitude: storeLatitude ? parseFloat(storeLatitude) : null,
         longitude: storeLongitude ? parseFloat(storeLongitude) : null,
         radius: storeRadius,
+        voidPin: voidPin,
         updatedAt: new Date().toISOString()
       });
       if (error) throw error;
@@ -251,6 +254,15 @@ export default function PengaturanClient({ initialEmail }: PengaturanClientProps
                 <div>
                   <label className="block text-sm text-text-secondary mb-1">Radius Toleransi (Meter)</label>
                   <input name="radius" value={storeRadius} onChange={e => setStoreRadius(parseInt(e.target.value) || 0)} type="number" className="w-full bg-background border border-border rounded px-3 py-2 text-text-primary focus:outline-none min-h-[44px] focus:border-primary-container" />
+                </div>
+              </div>
+              
+              <div className="pt-4 border-t border-border mt-2 space-y-4">
+                <h3 className="text-sm font-bold text-text-primary">🛡️ Keamanan Toko Lokal</h3>
+                <div>
+                  <label className="block text-sm text-text-secondary mb-1">PIN Void Transaksi (Kasir)</label>
+                  <input name="voidPin" value={voidPin} onChange={e => setVoidPin(e.target.value)} type="password" maxLength={6} placeholder="123456" className="w-full bg-background border border-border rounded px-3 py-2 text-text-primary focus:outline-none min-h-[44px] tracking-widest focus:border-primary-container" />
+                  <p className="text-xs text-text-secondary mt-1">Gunakan PIN ini untuk membatalkan nota dari kasir lokal.</p>
                 </div>
               </div>
               

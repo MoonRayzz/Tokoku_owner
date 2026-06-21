@@ -39,10 +39,33 @@ export async function GET(request: NextRequest) {
     'Total (Rp)': t.totalAmount,
   }));
 
+  const expenses = await prisma.expense.findMany({
+    where: {
+      date: { gte: start, lte: end },
+      ...(shiftParam ? { shiftId: shiftParam } : {})
+    },
+    include: {
+      employee: true
+    },
+    orderBy: { date: 'desc' }
+  });
+
+  const expenseRows = expenses.map(e => ({
+    'Waktu': new Date(e.date).toLocaleString('id-ID'),
+    'Kategori': e.category,
+    'Nominal (Rp)': e.amount,
+    'Kasir': e.employee.name,
+    'Keterangan': e.notes || '-'
+  }));
+
   if (type === 'excel') {
     const ws = XLSX.utils.json_to_sheet(rows);
+    const expenseWs = XLSX.utils.json_to_sheet(expenseRows);
+
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Laporan');
+    XLSX.utils.book_append_sheet(wb, ws, 'Laporan Penjualan');
+    XLSX.utils.book_append_sheet(wb, expenseWs, 'Pengeluaran');
+
     const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
     return new NextResponse(buffer, {
@@ -71,6 +94,25 @@ export async function GET(request: NextRequest) {
       head: [tableColumn],
       body: tableRows,
       startY: 20,
+    });
+
+    const finalY = (doc as any).lastAutoTable.finalY || 20;
+    
+    doc.text(`Pengeluaran Operasional`, 14, finalY + 15);
+    
+    const expenseColumn = ["Waktu", "Kategori", "Kasir", "Nominal (Rp)", "Keterangan"];
+    const expensePdfRows = expenses.map(e => [
+      new Date(e.date).toLocaleString('id-ID'),
+      e.category,
+      e.employee.name,
+      e.amount.toLocaleString('id-ID'),
+      e.notes || '-'
+    ]);
+
+    (doc as any).autoTable({
+      head: [expenseColumn],
+      body: expensePdfRows,
+      startY: finalY + 20,
     });
 
     const pdfOutput = doc.output('arraybuffer');

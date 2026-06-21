@@ -11,7 +11,8 @@ import {
   Settings, 
   LogOut,
   CalendarCheck,
-  Wallet
+  Wallet,
+  ShieldAlert
 } from 'lucide-react';
 import Logo from '../ui/Logo';
 import { createClient } from '@/app/lib/supabase/client';
@@ -79,7 +80,8 @@ export default function Sidebar() {
 
   const navItems = [
     { name: 'Beranda', href: '/dashboard', icon: LayoutDashboard },
-    { name: 'Laporan', href: '/laporan', icon: BarChart2 },
+    { name: 'Laporan Penjualan', href: '/laporan', icon: BarChart2 },
+    { name: 'Audit Void', href: '/laporan/void', icon: ShieldAlert },
     { name: 'Produk', href: '/produk', icon: Box },
     { name: 'Pengeluaran', href: '/pengeluaran', icon: Wallet },
     { name: 'Pelanggan', href: '/member', icon: Users },
@@ -125,7 +127,7 @@ export default function Sidebar() {
       {/* Navigation Links */}
       <nav className="flex-1 px-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
-          const isActive = pathname.startsWith(item.href);
+          const isActive = pathname === item.href || (pathname.startsWith(item.href + '/') && item.href !== '/laporan');
           const Icon = item.icon;
           
           return (

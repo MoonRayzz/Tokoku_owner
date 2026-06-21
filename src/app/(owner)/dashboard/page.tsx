@@ -12,9 +12,11 @@ import {
   AlertTriangle,
   ArrowRight,
   Wallet,
-  TrendingUp
+  TrendingUp,
+  Activity
 } from 'lucide-react';
 import Link from 'next/link';
+import { differenceInMinutes } from 'date-fns';
 
 export default async function DashboardPage() {
   const now = new Date();
@@ -113,6 +115,23 @@ export default async function DashboardPage() {
     });
   }
 
+  // Ambil Store Status
+  const storeStatus = await prisma.storeStatus.findUnique({
+    where: { id: 'local-store' }
+  });
+  
+  const lastPing = storeStatus?.lastPing ? new Date(storeStatus.lastPing) : null;
+  const minutesSincePing = lastPing ? differenceInMinutes(now, lastPing) : Infinity;
+  
+  let terminalStatus = { color: 'bg-text-secondary', label: 'Tidak Diketahui', pingText: 'Belum pernah sync' };
+  if (minutesSincePing < 5) {
+    terminalStatus = { color: 'bg-success', label: 'Terminal Aktif', pingText: `Terakhir sync: ${minutesSincePing} menit lalu` };
+  } else if (minutesSincePing <= 60) {
+    terminalStatus = { color: 'bg-warning', label: 'Perlu Diperhatikan', pingText: `Terakhir sync: ${minutesSincePing} menit lalu` };
+  } else if (lastPing) {
+    terminalStatus = { color: 'bg-danger', label: 'Terminal Offline', pingText: `Tidak ada respons > 1 jam` };
+  }
+
   // Top Products (Aggregasi in-memory untuk hari ini)
   const productSales: Record<string, { name: string; quantity: number }> = {};
   todayTx.forEach(tx => {
@@ -138,9 +157,12 @@ export default async function DashboardPage() {
         <div>
           <div className="flex items-center gap-3 mb-1">
             <h2 className="text-2xl font-bold text-text-primary">Selamat pagi, Owner 👋</h2>
-            <div className="flex items-center gap-1.5 bg-primary-container/10 border border-primary-container/20 px-2.5 py-1 rounded-full">
-              <div className="w-1.5 h-1.5 rounded-full bg-primary-container animate-pulse"></div>
-              <span className="text-[11px] font-semibold tracking-wider text-primary-container uppercase">Live</span>
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface border border-border`}>
+              <div className={`w-2 h-2 rounded-full ${terminalStatus.color} ${minutesSincePing < 5 ? 'animate-pulse' : ''}`}></div>
+              <div className="flex flex-col">
+                <span className="text-[11px] font-semibold leading-tight text-text-primary">{terminalStatus.label}</span>
+                <span className="text-[9px] text-text-secondary leading-tight">{terminalStatus.pingText}</span>
+              </div>
             </div>
           </div>
           <p className="text-sm text-text-secondary">Berikut performa toko Anda hari ini — {formattedDate}</p>

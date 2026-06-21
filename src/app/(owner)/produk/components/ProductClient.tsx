@@ -1,28 +1,44 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Product } from '@prisma/client';
+import { Product, StockLog } from '@prisma/client';
 import { 
   Search, 
   AlertTriangle,
   Download,
   Edit,
   X,
-  Info
+  Info,
+  History
 } from 'lucide-react';
 import { updateProduct } from '../actions';
 import { useToast } from '@/components/ui/Toast';
 
+type ProductWithLogs = Product & { StockLog: StockLog[] };
+
 interface ProductClientProps {
-  products: Product[];
+  products: ProductWithLogs[];
 }
 
 export default function ProductClient({ products }: ProductClientProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [editingProduct, setEditingProduct] = useState<ProductWithLogs | null>(null);
+  const [historyProduct, setHistoryProduct] = useState<ProductWithLogs | null>(null);
   const [loading, setLoading] = useState(false);
   const toast = useToast();
+
+  // Export Modal State
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportStartDate, setExportStartDate] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 1);
+    return d.toISOString().split('T')[0];
+  });
+  const [exportEndDate, setExportEndDate] = useState(() => {
+    return new Date().toISOString().split('T')[0];
+  });
+  const [isExporting, setIsExporting] = useState(false);
 
   const filteredProducts = useMemo(() => {
     return products.filter(p => 
@@ -31,7 +47,7 @@ export default function ProductClient({ products }: ProductClientProps) {
     );
   }, [products, searchQuery]);
 
-  const handleOpenModal = (product: Product) => {
+  const handleOpenModal = (product: ProductWithLogs) => {
     setEditingProduct(product);
     setIsModalOpen(true);
   };
@@ -60,36 +76,31 @@ export default function ProductClient({ products }: ProductClientProps) {
     }
   };
 
-  const handleExportCSV = () => {
-    if (filteredProducts.length === 0) return;
-    
-    // CSV Header
-    const headers = ['SKU', 'Nama Produk', 'Harga Jual', 'Harga Grosir', 'Min Grosir', 'Stok', 'Batas Stok Alert'];
-    
-    // CSV Rows
-    const rows = filteredProducts.map(p => [
-      `"${p.sku}"`,
-      `"${p.name.replace(/"/g, '""')}"`,
-      p.priceRetail,
-      p.priceWholesale || '',
-      p.wholesaleMinQty || '',
-      p.stock,
-      p.minStockAlert
-    ]);
-    
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(r => r.join(','))
-    ].join('\n');
-    
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `Data_Produk_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleExportExcel = async () => {
+    try {
+      setIsExporting(true);
+      const url = new URL('/api/export/produk', window.location.origin);
+      url.searchParams.set('startDate', exportStartDate);
+      url.searchParams.set('endDate', exportEndDate);
+
+      const response = await fetch(url.toString());
+      if (!response.ok) throw new Error('Gagal mengunduh data');
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.setAttribute('download', `Laporan_Produk_${new Date().toISOString().split('T')[0]}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setShowExportModal(false);
+    } catch (error) {
+      console.error(error);
+      toast.error('Gagal mengekspor data Excel');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -118,13 +129,13 @@ export default function ProductClient({ products }: ProductClientProps) {
             onChange={e => setSearchQuery(e.target.value)}
           />
         </div>
-        <div className="flex items-center gap-3 w-full lg:w-auto">
+        <div className="flex flex-wrap gap-3 mt-4 lg:mt-0">
           <button 
-            onClick={handleExportCSV}
-            className="w-full lg:w-auto bg-surface-bright border border-border text-text-primary hover:bg-surface-container-high font-semibold px-6 h-10 rounded-lg flex items-center justify-center transition-all shadow-sm"
+            onClick={() => setShowExportModal(true)}
+            className="flex items-center px-4 py-2 bg-surface border border-border text-text-secondary rounded-lg hover:bg-surface-container transition-colors text-sm font-medium"
           >
             <Download size={18} className="mr-2" />
-            Export CSV
+            Export Excel
           </button>
         </div>
       </div>
@@ -190,6 +201,13 @@ export default function ProductClient({ products }: ProductClientProps) {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex justify-center items-center gap-2">
+                          <button 
+                            onClick={() => setHistoryProduct(p)}
+                            className="p-2 text-text-secondary hover:text-brand-primary hover:bg-brand-primary/10 rounded-lg transition-all" 
+                            title="Riwayat Stok"
+                          >
+                            <History size={18} />
+                          </button>
                           <button 
                             onClick={() => handleOpenModal(p)}
                             className="p-2 text-text-secondary hover:text-primary-container hover:bg-surface-container-high rounded-lg transition-all" 
@@ -320,6 +338,120 @@ export default function ProductClient({ products }: ProductClientProps) {
                 {loading ? 'Menyimpan...' : 'Simpan Perubahan'}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Riwayat Stok */}
+      {historyProduct && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-surface border border-border rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+            <div className="p-5 border-b border-border flex items-center justify-between bg-surface-container-low">
+              <div>
+                <h3 className="text-lg font-bold text-text-primary">Riwayat Stok</h3>
+                <p className="text-sm text-text-secondary">{historyProduct.name} ({historyProduct.sku})</p>
+              </div>
+              <button onClick={() => setHistoryProduct(null)} className="p-2 hover:bg-surface-container-high text-text-secondary hover:text-text-primary rounded-full transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-0 overflow-y-auto flex-1">
+              {(!historyProduct.StockLog || historyProduct.StockLog.length === 0) ? (
+                <div className="p-8 text-center text-text-secondary">Belum ada riwayat pergerakan stok.</div>
+              ) : (
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-surface-container/50 sticky top-0 z-10 shadow-sm">
+                    <tr>
+                      <th className="px-6 py-3 font-semibold text-text-secondary">Tanggal</th>
+                      <th className="px-6 py-3 font-semibold text-text-secondary">Tipe</th>
+                      <th className="px-6 py-3 font-semibold text-text-secondary">Jumlah</th>
+                      <th className="px-6 py-3 font-semibold text-text-secondary">Sisa Stok</th>
+                      <th className="px-6 py-3 font-semibold text-text-secondary">Keterangan</th>
+                      <th className="px-6 py-3 font-semibold text-text-secondary">Kasir</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {historyProduct.StockLog.map(log => {
+                      let typeColor = 'text-text-secondary';
+                      let typeLabel = log.type;
+                      let amountPrefix = '';
+                      
+                      if (log.type === 'IN') { typeColor = 'text-status-success font-medium'; typeLabel = 'Masuk (PO)'; amountPrefix = '+'; }
+                      else if (log.type === 'OUT') { typeColor = 'text-brand-secondary font-medium'; typeLabel = 'Terjual'; amountPrefix = '-'; }
+                      else if (log.type === 'CORRECTION') { typeColor = 'text-warning font-medium'; typeLabel = log.amount > 0 ? 'Tambah Stok' : 'Koreksi'; amountPrefix = (log.amount > 0 ? '+' : ''); }
+                      else if (log.type === 'VOID_RETURN') { typeColor = 'text-status-success font-medium'; typeLabel = 'Void / Retur'; amountPrefix = '+'; }
+
+                      return (
+                        <tr key={log.id} className="hover:bg-surface-container/30 transition-colors">
+                          <td className="px-6 py-3 text-text-primary">{new Date(log.date).toLocaleString('id-ID')}</td>
+                          <td className={`px-6 py-3 ${typeColor}`}>{typeLabel}</td>
+                          <td className={`px-6 py-3 ${typeColor}`}>{amountPrefix}{log.amount}</td>
+                          <td className="px-6 py-3 text-text-primary font-medium">{log.stockAfter}</td>
+                          <td className="px-6 py-3 text-text-secondary">{log.notes || '-'}</td>
+                          <td className="px-6 py-3 text-text-secondary">{log.employeeId || '-'}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Filter Export */}
+      {showExportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-surface border border-border rounded-xl w-full max-w-md overflow-hidden flex flex-col shadow-2xl">
+            <div className="flex justify-between items-center p-6 border-b border-border bg-surface-container/30">
+              <h2 className="text-xl font-bold text-text-primary">Export Excel Produk</h2>
+              <button onClick={() => setShowExportModal(false)} className="text-text-secondary hover:text-text-primary">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-text-secondary mb-4">Pilih rentang tanggal untuk mengambil data Riwayat Stok Masuk dan Keluar. Sheet Master Produk akan selalu menggunakan stok riil saat ini.</p>
+              
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Dari Tanggal</label>
+                <input 
+                  type="date" 
+                  value={exportStartDate}
+                  onChange={(e) => setExportStartDate(e.target.value)}
+                  className="w-full bg-background border border-border rounded-lg px-4 py-2.5 text-text-primary focus:outline-none focus:border-primary-container/50 transition-colors"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Sampai Tanggal</label>
+                <input 
+                  type="date" 
+                  value={exportEndDate}
+                  onChange={(e) => setExportEndDate(e.target.value)}
+                  className="w-full bg-background border border-border rounded-lg px-4 py-2.5 text-text-primary focus:outline-none focus:border-primary-container/50 transition-colors"
+                />
+              </div>
+            </div>
+            <div className="p-6 border-t border-border bg-surface-container/30 flex justify-end gap-3">
+              <button 
+                onClick={() => setShowExportModal(false)}
+                className="px-6 py-2 rounded-lg font-semibold text-text-secondary hover:bg-surface-container transition-colors"
+              >
+                Batal
+              </button>
+              <button 
+                onClick={handleExportExcel}
+                disabled={isExporting}
+                className="px-6 py-2 bg-primary-container text-on-primary-fixed rounded-lg font-bold hover:brightness-110 transition-all flex items-center justify-center min-w-[120px] disabled:opacity-50"
+              >
+                {isExporting ? (
+                  <span className="material-symbols-outlined animate-spin text-[20px]">sync</span>
+                ) : (
+                  'Download Excel'
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

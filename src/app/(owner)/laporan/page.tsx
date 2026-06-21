@@ -81,6 +81,10 @@ export default async function LaporanPage({
   }, 0);
 
   const netProfit = totalSales - totalHpp - totalExpense;
+
+  // Nilai Inventori (Modal Mengendap)
+  const allProducts = await prisma.product.findMany({ select: { stock: true, priceBuy: true } });
+  const totalInventoryValue = allProducts.reduce((sum, p) => sum + (p.stock * (p.priceBuy || 0)), 0);
   
   // Data transaksi untuk tabel (di-paginate)
   const transactions = await prisma.transaction.findMany({
@@ -173,7 +177,7 @@ export default async function LaporanPage({
       </section>
 
       {/* Summary Metrics */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+      <section className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {/* Metric 1 */}
         <div className="bg-surface border border-border rounded-xl p-5 flex flex-col relative overflow-hidden group hover:border-border-muted transition-colors">
           <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
@@ -217,6 +221,15 @@ export default async function LaporanPage({
             <Activity size={16} /> Rata-rata Harian
           </p>
           <h3 className="text-xl text-text-primary font-bold">Rp {Math.round(avgDaily).toLocaleString('id-ID')}</h3>
+        </div>
+
+        {/* Metric 6 (Nilai Inventori) */}
+        <div className="bg-surface border border-border rounded-xl p-5 flex flex-col relative overflow-hidden group hover:border-border-muted transition-colors">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-warning/5 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+          <p className="text-xs text-text-secondary mb-2 flex items-center gap-1.5 uppercase font-semibold text-warning">
+            <Activity size={16} /> Nilai Inventori
+          </p>
+          <h3 className="text-xl text-warning font-bold">Rp {totalInventoryValue.toLocaleString('id-ID')}</h3>
         </div>
       </section>
 
