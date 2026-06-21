@@ -11,29 +11,34 @@ export default function OwnerLayout({
 }) {
   return (
     <>
-      <OfflineBanner />
       <InstallPrompt />
-      <div className="flex min-h-[100dvh] w-full bg-background selection:bg-primary-container selection:text-white">
-      {/* Sidebar untuk Desktop (hidden di mobile) */}
-      <div className="hidden md:block w-[240px] flex-shrink-0">
-        <Sidebar />
-      </div>
+      <div className="flex flex-col h-[100dvh] w-full bg-background selection:bg-primary-container selection:text-white overflow-hidden">
+        
+        {/* Offline Banner ditempatkan di root flow sehingga mendorong konten ke bawah */}
+        <OfflineBanner />
+        
+        <div className="flex flex-1 overflow-hidden">
+          {/* Sidebar untuk Desktop (hidden di mobile) */}
+          <div className="hidden md:flex w-[240px] flex-shrink-0">
+            <Sidebar />
+          </div>
 
-      {/* Konten Utama */}
-      <div className="flex-1 flex flex-col min-w-0 h-[100dvh] overflow-y-auto pb-24">
-        {/* TopBar untuk Mobile (hidden di desktop) */}
-        <TopBar />
-        
-        {/* Header Spacer Khusus Desktop (karena di desain ada sticky header transparan) */}
-        <header className="hidden md:flex sticky top-0 z-10 bg-background/90 backdrop-blur-md border-b border-border px-8 py-6 h-12 items-center justify-between">
-          <div className="w-full"></div>
-        </header>
-        
-        <main className="flex-1 w-full relative pt-16 md:pt-0">
-          {children}
-        </main>
+          {/* Konten Utama */}
+          <div className="flex-1 flex flex-col min-w-0 overflow-y-auto pb-24 relative">
+            {/* TopBar untuk Mobile (hidden di desktop) */}
+            <TopBar />
+            
+            {/* Header Spacer Khusus Desktop (karena di desain ada sticky header transparan) */}
+            <header className="hidden md:flex sticky top-0 z-10 bg-background/90 backdrop-blur-md border-b border-border px-8 py-6 h-12 items-center justify-between">
+              <div className="w-full"></div>
+            </header>
+            
+            <main className="flex-1 w-full relative">
+              {children}
+            </main>
+          </div>
+        </div>
       </div>
-    </div>
     </>
   );
 }

@@ -60,7 +60,7 @@ export default function TopBar() {
 
   return (
     <>
-      <header className="md:hidden flex items-center justify-between p-4 border-b border-border bg-surface fixed top-0 w-full z-30">
+      <header className="md:hidden flex items-center justify-between p-4 border-b border-border bg-surface sticky top-0 w-full z-40">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-md overflow-hidden bg-primary-container flex items-center justify-center">
             {logoUrl ? (
@@ -72,17 +72,20 @@ export default function TopBar() {
           <span className="font-bold text-text-primary">TokoKu</span>
           <MobileStatusDot />
         </div>
-        <button 
-          onClick={() => setIsOpen(!isOpen)}
-          className="text-text-secondary hover:text-text-primary p-1"
-        >
-          {isOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
+        <div className="flex items-center gap-3">
+          <PwaInstallButton className="!px-2.5 !py-1.5 !text-xs" />
+          <button 
+            onClick={() => setIsOpen(!isOpen)}
+            className="text-text-secondary hover:text-text-primary p-1"
+          >
+            {isOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
+        </div>
       </header>
 
       {/* Mobile Menu Overlay */}
       {isOpen && (
-        <div className="md:hidden fixed inset-0 top-[57px] z-20 bg-background flex flex-col p-4 border-b border-border">
+        <div className="md:hidden fixed inset-0 top-[65px] z-30 bg-background flex flex-col p-4 border-b border-border">
           <nav className="flex flex-col gap-2">
             <Link href="/dashboard" onClick={() => setIsOpen(false)} className="px-4 py-3 rounded-lg bg-surface text-text-primary font-medium border border-border">Beranda</Link>
             <Link href="/laporan" onClick={() => setIsOpen(false)} className="px-4 py-3 rounded-lg bg-surface text-text-primary font-medium border border-border">Laporan</Link>

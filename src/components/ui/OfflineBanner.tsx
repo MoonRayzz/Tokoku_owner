@@ -24,9 +24,9 @@ export function OfflineBanner() {
   if (!isOffline) return null
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-[100] flex items-center justify-center gap-2 px-4 py-2 bg-amber-500/90 text-white text-sm backdrop-blur-sm shadow-md">
+    <div className="w-full z-[100] flex items-center justify-center gap-2 px-4 py-2 bg-amber-500/90 text-white text-sm shadow-md">
       <WifiOff size={16} />
-      <span className="font-medium">Offline — Menampilkan data terakhir yang tersimpan</span>
+      <span className="font-medium flex-1 text-center leading-tight">Offline — Menampilkan data terakhir yang tersimpan</span>
     </div>
   )
 }

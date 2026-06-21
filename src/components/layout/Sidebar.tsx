@@ -109,7 +109,7 @@ export default function Sidebar() {
   }, [supabase]);
 
   return (
-    <aside className="w-[240px] h-[100dvh] fixed left-0 top-0 border-r border-border bg-surface flex flex-col py-6 z-20">
+    <aside className="w-full h-full border-r border-border bg-surface flex flex-col py-6 z-20">
       {/* Brand Logo */}
       <div className="px-6 mb-8 flex items-center gap-3">
         <div className="w-10 h-10 rounded-md overflow-hidden bg-primary-container flex items-center justify-center">
