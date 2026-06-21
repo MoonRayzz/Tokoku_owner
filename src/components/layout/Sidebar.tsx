@@ -17,6 +17,7 @@ import {
 import Logo from '../ui/Logo';
 import { createClient } from '@/app/lib/supabase/client';
 import { useRouter } from 'next/navigation';
+import { PwaInstallButton } from '../pwa/PwaInstallButton';
 
 function StoreStatusIndicator() {
   const supabase = createClient();
@@ -145,6 +146,9 @@ export default function Sidebar() {
             </Link>
           );
         })}
+        <div className="pt-2">
+          <PwaInstallButton />
+        </div>
       </nav>
 
       {/* Sidebar Footer */}

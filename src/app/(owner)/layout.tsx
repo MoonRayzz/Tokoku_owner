@@ -29,7 +29,7 @@ export default function OwnerLayout({
           <div className="w-full"></div>
         </header>
         
-        <main className="flex-1 w-full relative">
+        <main className="flex-1 w-full relative pt-16 md:pt-0">
           {children}
         </main>
       </div>

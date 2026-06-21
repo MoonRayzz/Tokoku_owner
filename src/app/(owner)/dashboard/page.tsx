@@ -209,13 +209,20 @@ export default async function DashboardPage() {
 
   const formattedDate = format(now, 'EEEE, dd MMMM yyyy', { locale: id });
 
+  // Logika sapaan dinamis berdasarkan jam lokal Server/WIB
+  const hour = now.getHours();
+  let greeting = 'Selamat pagi';
+  if (hour >= 11 && hour < 15) greeting = 'Selamat siang';
+  else if (hour >= 15 && hour < 18) greeting = 'Selamat sore';
+  else if (hour >= 18 || hour < 4) greeting = 'Selamat malam';
+
   return (
     <div className="px-4 md:px-8 py-8 max-w-7xl mx-auto space-y-6">
       {/* Welcome Banner & Page Title */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-8">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <h2 className="text-2xl font-bold text-text-primary">Selamat pagi, Owner 👋</h2>
+            <h2 className="text-2xl font-bold text-text-primary">{greeting}, Owner 👋</h2>
             <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface border border-border`}>
               <div className={`w-2 h-2 rounded-full ${terminalStatus.color} ${minutesSincePing < 5 ? 'animate-pulse' : ''}`}></div>
               <div className="flex flex-col">

@@ -5,6 +5,7 @@ import { Menu, X } from 'lucide-react';
 import Logo from '../ui/Logo';
 import Link from 'next/link';
 import { createClient } from '@/app/lib/supabase/client';
+import { PwaInstallButton } from '../pwa/PwaInstallButton';
 
 function MobileStatusDot() {
   const supabase = createClient();
@@ -89,6 +90,7 @@ export default function TopBar() {
             <Link href="/member" onClick={() => setIsOpen(false)} className="px-4 py-3 rounded-lg bg-surface text-text-primary font-medium border border-border">Pelanggan</Link>
             <Link href="/absensi" onClick={() => setIsOpen(false)} className="px-4 py-3 rounded-lg bg-surface text-text-primary font-medium border border-border">Absensi</Link>
             <Link href="/pengaturan" onClick={() => setIsOpen(false)} className="px-4 py-3 rounded-lg bg-surface text-text-primary font-medium border border-border">Pengaturan</Link>
+            <PwaInstallButton isMobile={true} />
           </nav>
         </div>
       )}
