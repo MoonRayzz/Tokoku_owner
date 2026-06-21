@@ -125,11 +125,13 @@ export default async function DashboardPage() {
   
   let terminalStatus = { color: 'bg-text-secondary', label: 'Tidak Diketahui', pingText: 'Belum pernah sync' };
   if (minutesSincePing < 5) {
-    terminalStatus = { color: 'bg-success', label: 'Terminal Aktif', pingText: `Terakhir sync: ${minutesSincePing} menit lalu` };
+    terminalStatus = { color: 'bg-success', label: 'Terminal Aktif', pingText: `Baru saja (Live)` };
   } else if (minutesSincePing <= 60) {
-    terminalStatus = { color: 'bg-warning', label: 'Perlu Diperhatikan', pingText: `Terakhir sync: ${minutesSincePing} menit lalu` };
+    terminalStatus = { color: 'bg-success', label: 'Terminal Aktif', pingText: `Terakhir sync: ${minutesSincePing} menit lalu` };
+  } else if (minutesSincePing <= 180) {
+    terminalStatus = { color: 'bg-warning', label: 'Perlu Diperhatikan', pingText: `Terakhir sync: ${Math.floor(minutesSincePing/60)} jam lalu` };
   } else if (lastPing) {
-    terminalStatus = { color: 'bg-danger', label: 'Terminal Offline', pingText: `Tidak ada respons > 1 jam` };
+    terminalStatus = { color: 'bg-danger', label: 'Terminal Offline', pingText: `Tidak ada respons > 3 jam` };
   }
 
   // Top Products (Aggregasi in-memory untuk hari ini)
