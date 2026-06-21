@@ -18,6 +18,7 @@ interface Expense {
   notes: string | null;
   employeeId: string;
   employee?: { name: string };
+  shift?: { name: string };
   syncStatus: string;
 }
 
@@ -29,6 +30,8 @@ interface ExpenseClientProps {
   limit: number;
   initialSearch: string;
   initialCategory: string;
+  employees: { id: string, name: string }[];
+  shifts: { id: string, name: string }[];
 }
 
 const CATEGORIES = [
@@ -39,7 +42,7 @@ const CATEGORIES = [
   'LAINNYA'
 ];
 
-export default function ExpenseClient({ expenses, totalPages, totalCount, currentPage, limit, initialSearch, initialCategory }: ExpenseClientProps) {
+export default function ExpenseClient({ expenses, totalPages, totalCount, currentPage, limit, initialSearch, initialCategory, employees, shifts }: ExpenseClientProps) {
   const [loading, setLoading] = useState(false);
   const toast = useToast();
   
@@ -138,7 +141,7 @@ export default function ExpenseClient({ expenses, totalPages, totalCount, curren
   };
 
   return (
-    <div className="px-4 md:px-8 py-8 max-w-7xl mx-auto space-y-6">
+    <div className="p-4 md:p-8 space-y-6 w-full">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold text-text-primary">Pengeluaran Operasional</h2>
@@ -146,9 +149,9 @@ export default function ExpenseClient({ expenses, totalPages, totalCount, curren
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         
-        {/* Form Tambah */}
+        {/* Form Entry */}
         <div className="lg:col-span-1">
           <div className="bg-surface border border-border rounded-xl p-5 shadow-sm">
             <h3 className="font-semibold text-text-primary mb-4 flex items-center gap-2">
@@ -184,6 +187,34 @@ export default function ExpenseClient({ expenses, totalPages, totalCount, curren
               </div>
 
               <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-text-secondary uppercase">Karyawan</label>
+                <select 
+                  name="employeeId" 
+                  required
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-text-primary outline-none focus:border-primary-container"
+                >
+                  <option value="">Pilih Karyawan...</option>
+                  {employees.map(emp => (
+                    <option key={emp.id} value={emp.id}>{emp.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-text-secondary uppercase">Sesi / Shift</label>
+                <select 
+                  name="shiftId" 
+                  required
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-text-primary outline-none focus:border-primary-container"
+                >
+                  <option value="">Pilih Sesi...</option>
+                  {shifts.map(shift => (
+                    <option key={shift.id} value={shift.id}>{shift.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-text-secondary uppercase">Keterangan</label>
                 <textarea 
                   name="notes" 
@@ -205,8 +236,8 @@ export default function ExpenseClient({ expenses, totalPages, totalCount, curren
         </div>
 
         {/* Tabel Data */}
-        <div className="lg:col-span-2">
-          <div className="bg-surface border border-border rounded-xl overflow-hidden shadow-sm flex flex-col h-full">
+        <div className="lg:col-span-3 flex flex-col min-h-[400px]">
+          <div className="bg-surface border border-border rounded-xl overflow-hidden shadow-sm flex flex-col flex-1">
             <div className="p-5 border-b border-border flex flex-col md:flex-row justify-between items-start md:items-center bg-surface-container-high/30 gap-4">
               <h3 className="font-semibold text-text-primary flex items-center gap-2">
                 <Filter size={18} className="text-text-secondary" />
@@ -244,12 +275,14 @@ export default function ExpenseClient({ expenses, totalPages, totalCount, curren
             </div>
 
             <div className="flex-1 overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[500px]">
+              <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-surface-container-high border-b border-border">
                     <th className="px-5 py-3 text-[11px] font-semibold text-text-secondary uppercase tracking-wider">Tanggal</th>
                     <th className="px-5 py-3 text-[11px] font-semibold text-text-secondary uppercase tracking-wider">Kategori</th>
                     <th className="px-5 py-3 text-[11px] font-semibold text-text-secondary uppercase tracking-wider">Keterangan</th>
+                    <th className="px-5 py-3 text-[11px] font-semibold text-text-secondary uppercase tracking-wider">Karyawan</th>
+                    <th className="px-5 py-3 text-[11px] font-semibold text-text-secondary uppercase tracking-wider">Sesi</th>
                     <th className="px-5 py-3 text-[11px] font-semibold text-text-secondary uppercase tracking-wider text-right">Nominal</th>
                     <th className="px-5 py-3 text-[11px] font-semibold text-text-secondary uppercase tracking-wider text-center">Aksi</th>
                   </tr>
@@ -257,7 +290,7 @@ export default function ExpenseClient({ expenses, totalPages, totalCount, curren
                 <tbody className="divide-y divide-border">
                   {expenses.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-5 py-8 text-center text-text-secondary">Belum ada pengeluaran.</td>
+                      <td colSpan={7} className="px-5 py-8 text-center text-text-secondary">Belum ada pengeluaran.</td>
                     </tr>
                   ) : (
                     expenses.map(exp => (
@@ -272,6 +305,12 @@ export default function ExpenseClient({ expenses, totalPages, totalCount, curren
                         </td>
                         <td className="px-5 py-3 text-sm text-text-secondary max-w-[200px] truncate">
                           {exp.notes || '-'}
+                        </td>
+                        <td className="px-5 py-3 text-sm text-text-primary">
+                          {exp.employee?.name || '-'}
+                        </td>
+                        <td className="px-5 py-3 text-sm text-text-primary">
+                          {exp.shift?.name || '-'}
                         </td>
                         <td className="px-5 py-3 text-sm text-right font-semibold text-error">
                           Rp {exp.amount.toLocaleString('id-ID')}

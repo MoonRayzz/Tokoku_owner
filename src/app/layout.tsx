@@ -47,6 +47,20 @@ export default function RootLayout({
 
         {/* PWA General */}
         <meta name="mobile-web-app-capable" content="yes" />
+
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.deferredInstallPrompt = null;
+              window.addEventListener('beforeinstallprompt', (e) => {
+                // Prevent the mini-infobar from appearing on mobile
+                e.preventDefault();
+                // Stash the event so it can be triggered later.
+                window.deferredInstallPrompt = e;
+              });
+            `,
+          }}
+        />
       </head>
       {/* Perbaikan Responsif:
         Menggunakan h-[100dvh] (Dynamic Viewport Height) alih-alih h-screen

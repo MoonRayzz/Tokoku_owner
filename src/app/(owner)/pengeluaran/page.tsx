@@ -1,6 +1,7 @@
 import { getExpenses } from './actions';
 import ExpenseClient from './ExpenseClient';
 import { PAGE_SIZE } from '@/lib/constants';
+import { prisma } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,6 +21,14 @@ export default async function PengeluaranPage({
   const { expenses, totalCount } = await getExpenses(page, limit, search, category);
   const totalPages = Math.ceil(totalCount / limit);
 
+  const allEmployees = await prisma.employee.findMany({
+    orderBy: { name: 'asc' }
+  });
+
+  const allShifts = await prisma.shift.findMany({
+    orderBy: { createdAt: 'desc' }
+  });
+
   return (
     <ExpenseClient 
       expenses={expenses as any} 
@@ -29,6 +38,8 @@ export default async function PengeluaranPage({
       limit={limit}
       initialSearch={search}
       initialCategory={category}
+      employees={allEmployees}
+      shifts={allShifts}
     />
   );
 }

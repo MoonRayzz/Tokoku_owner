@@ -43,24 +43,26 @@ export default function TopBar() {
   const [isOpen, setIsOpen] = useState(false);
   const supabase = createClient();
   const [logoUrl, setLogoUrl] = useState('');
+  const [storeName, setStoreName] = useState('TokoKu');
 
   useEffect(() => {
-    const fetchLogo = async () => {
+    const fetchProfile = async () => {
       try {
-        const { data } = await supabase.from('StoreProfile').select('logoUrl').eq('id', 'local-store').single();
-        if (data && data.logoUrl) {
-          setLogoUrl(data.logoUrl);
+        const { data } = await supabase.from('StoreProfile').select('logoUrl, name').eq('id', 'local-store').single();
+        if (data) {
+          if (data.logoUrl) setLogoUrl(data.logoUrl);
+          if (data.name) setStoreName(data.name);
         }
       } catch (err) {
         // ignore
       }
     };
-    fetchLogo();
+    fetchProfile();
   }, [supabase]);
 
   return (
-    <>
-      <header className="md:hidden flex items-center justify-between p-4 border-b border-border bg-surface sticky top-0 w-full z-40">
+    <div className="md:hidden sticky top-0 w-full z-40 flex flex-col shadow-sm">
+      <header className="flex items-center justify-between p-4 border-b border-border bg-surface relative z-20">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-md overflow-hidden bg-primary-container flex items-center justify-center">
             {logoUrl ? (
@@ -69,11 +71,10 @@ export default function TopBar() {
               <Logo className="p-1 w-full h-full object-cover" />
             )}
           </div>
-          <span className="font-bold text-text-primary">TokoKu</span>
+          <span className="font-bold text-text-primary">{storeName}</span>
           <MobileStatusDot />
         </div>
         <div className="flex items-center gap-3">
-          <PwaInstallButton className="!px-2.5 !py-1.5 !text-xs" />
           <button 
             onClick={() => setIsOpen(!isOpen)}
             className="text-text-secondary hover:text-text-primary p-1"
@@ -85,11 +86,13 @@ export default function TopBar() {
 
       {/* Mobile Menu Overlay */}
       {isOpen && (
-        <div className="md:hidden fixed inset-0 top-[65px] z-30 bg-background flex flex-col p-4 border-b border-border">
+        <div className="absolute top-full left-0 w-full h-[calc(100dvh-65px)] bg-background flex flex-col p-4 border-b border-border z-10 overflow-y-auto">
           <nav className="flex flex-col gap-2">
             <Link href="/dashboard" onClick={() => setIsOpen(false)} className="px-4 py-3 rounded-lg bg-surface text-text-primary font-medium border border-border">Beranda</Link>
-            <Link href="/laporan" onClick={() => setIsOpen(false)} className="px-4 py-3 rounded-lg bg-surface text-text-primary font-medium border border-border">Laporan</Link>
+            <Link href="/laporan" onClick={() => setIsOpen(false)} className="px-4 py-3 rounded-lg bg-surface text-text-primary font-medium border border-border">Laporan Penjualan</Link>
+            <Link href="/laporan/void" onClick={() => setIsOpen(false)} className="px-4 py-3 rounded-lg bg-surface text-text-primary font-medium border border-border">Audit Void</Link>
             <Link href="/produk" onClick={() => setIsOpen(false)} className="px-4 py-3 rounded-lg bg-surface text-text-primary font-medium border border-border">Produk</Link>
+            <Link href="/pengeluaran" onClick={() => setIsOpen(false)} className="px-4 py-3 rounded-lg bg-surface text-text-primary font-medium border border-border">Pengeluaran</Link>
             <Link href="/member" onClick={() => setIsOpen(false)} className="px-4 py-3 rounded-lg bg-surface text-text-primary font-medium border border-border">Pelanggan</Link>
             <Link href="/absensi" onClick={() => setIsOpen(false)} className="px-4 py-3 rounded-lg bg-surface text-text-primary font-medium border border-border">Absensi</Link>
             <Link href="/pengaturan" onClick={() => setIsOpen(false)} className="px-4 py-3 rounded-lg bg-surface text-text-primary font-medium border border-border">Pengaturan</Link>
@@ -97,6 +100,6 @@ export default function TopBar() {
           </nav>
         </div>
       )}
-    </>
+    </div>
   );
 }

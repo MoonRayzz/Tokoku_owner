@@ -28,6 +28,11 @@ export function InstallPrompt() {
       setInstallEvent(e as BeforeInstallPromptEvent)
     }
 
+    // Cek jaring penangkap event statis dari layout.tsx
+    if (typeof window !== 'undefined' && (window as any).deferredInstallPrompt) {
+      setInstallEvent((window as any).deferredInstallPrompt)
+    }
+
     window.addEventListener('beforeinstallprompt', handler)
     return () => window.removeEventListener('beforeinstallprompt', handler)
   }, [])

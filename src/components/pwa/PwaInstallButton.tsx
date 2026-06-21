@@ -16,6 +16,11 @@ export function PwaInstallButton({ className, isMobile = false }: { className?: 
       setInstallEvent(e);
     };
 
+    // Ambil event yang mungkin sudah tertangkap duluan oleh script di layout.tsx
+    if (typeof window !== 'undefined' && (window as any).deferredInstallPrompt) {
+      setInstallEvent((window as any).deferredInstallPrompt);
+    }
+
     window.addEventListener('beforeinstallprompt', handler);
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);

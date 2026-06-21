@@ -119,9 +119,9 @@ export default function Sidebar() {
             <Logo className="p-1 w-full h-full object-cover" />
           )}
         </div>
-        <div>
-          <h1 className="text-xl font-bold text-text-primary tracking-tight">{storeName}</h1>
-          <p className="text-xs text-text-secondary">Admin Panel</p>
+        <div className="min-w-0 pr-2">
+          <h1 className="text-xl font-bold text-text-primary leading-tight break-words whitespace-normal line-clamp-2">{storeName}</h1>
+          <p className="text-xs text-text-secondary mt-0.5">Admin Panel</p>
         </div>
       </div>
 

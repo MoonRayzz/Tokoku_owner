@@ -18,7 +18,7 @@ export async function getExpenses(page: number = 1, limit: number = 20, search?:
     prisma.expense.findMany({
       where: whereClause,
       orderBy: { date: 'desc' },
-      include: { employee: true },
+      include: { employee: true, shift: true },
       skip: (page - 1) * limit,
       take: limit,
     }),
@@ -34,15 +34,11 @@ export async function addExpense(formData: FormData) {
     const amount = parseFloat(formData.get('amount') as string);
     const notes = formData.get('notes') as string | null;
 
-    if (!category || !amount || isNaN(amount) || amount <= 0) {
-      return { success: false, error: 'Data tidak valid' };
-    }
+    const employeeId = formData.get('employeeId') as string;
+    const shiftId = formData.get('shiftId') as string;
 
-    let employee = await prisma.employee.findFirst({ where: { role: 'owner' } });
-    if (!employee) {
-      employee = await prisma.employee.create({
-        data: { name: 'Owner', role: 'owner', isActive: true }
-      });
+    if (!category || !amount || isNaN(amount) || amount <= 0 || !employeeId || !shiftId) {
+      return { success: false, error: 'Data tidak valid. Semua form wajib diisi.' };
     }
 
     await prisma.expense.create({
@@ -50,7 +46,8 @@ export async function addExpense(formData: FormData) {
         category,
         amount,
         notes,
-        employeeId: employee.id,
+        employeeId: employeeId,
+        shiftId: shiftId,
         syncStatus: 'SYNCED' // Di owner langsung disinkronisasi statusnya (cloud-first)
       }
     });
