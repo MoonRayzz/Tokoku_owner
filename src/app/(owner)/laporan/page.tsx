@@ -60,15 +60,33 @@ export default async function LaporanPage({
     whereClause.memberId = resolvedParams.member;
   }
 
-  // Optimasi: Hitung total menggunakan aggregate, bukan fetch semua data (Meringankan memori)
+  // Optimasi: Hitung total omzet (NON-UTANG)
   const aggregate = await prisma.transaction.aggregate({
-    where: whereClause,
+    where: { ...whereClause, paymentMethod: { not: 'utang' } },
     _sum: { totalAmount: true },
     _count: { id: true }
   });
 
   const totalSales = aggregate._sum.totalAmount || 0;
-  const totalCount = aggregate._count.id;
+  
+  // Total Transaksi Utang Baru
+  const debtAggregate = await prisma.transaction.aggregate({
+    where: { ...whereClause, paymentMethod: 'utang' },
+    _sum: { totalAmount: true },
+    _count: { id: true }
+  });
+  const debtSales = debtAggregate._sum.totalAmount || 0;
+  
+  const totalCount = aggregate._count.id + debtAggregate._count.id;
+
+  // Cicilan Utang Masuk
+  const debtPaymentAggregate = await prisma.debtPayment.aggregate({
+    where: {
+      paidAt: { gte: startDate, lte: endDate }
+    },
+    _sum: { amount: true }
+  });
+  const cicilanMasuk = debtPaymentAggregate._sum.amount || 0;
   
   // Total Pengeluaran
   const expenseAggregate = await prisma.expense.aggregate({
@@ -95,7 +113,8 @@ export default async function LaporanPage({
   const hppResult: any[] = await prisma.$queryRaw(hppQuery);
   const totalHpp = Number(hppResult[0]?.totalHpp || 0);
 
-  const netProfit = totalSales - totalHpp - totalExpense;
+  // Laba Bersih = (Omzet Tunai + Cicilan Masuk) - HPP (Seluruhnya) - Pengeluaran
+  const netProfit = (totalSales + cicilanMasuk) - totalHpp - totalExpense;
 
   // Nilai Inventori (Modal Mengendap)
   const inventoryResult: any[] = await prisma.$queryRaw`
@@ -216,9 +235,18 @@ export default async function LaporanPage({
         <div className="bg-surface border border-border rounded-xl p-5 flex flex-col relative overflow-hidden group hover:border-border-muted transition-colors">
           <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
           <p className="text-xs text-text-secondary mb-2 flex items-center gap-1.5 uppercase font-semibold">
-            <Wallet size={16} /> Total Omzet
+            <Wallet size={16} /> Total Omzet Tunai
           </p>
           <h3 className="text-xl text-text-primary font-bold">Rp {totalSales.toLocaleString('id-ID')}</h3>
+        </div>
+
+        {/* Cicilan Masuk */}
+        <div className="bg-surface border border-border rounded-xl p-5 flex flex-col relative overflow-hidden group hover:border-border-muted transition-colors">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-success/5 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+          <p className="text-xs text-text-secondary mb-2 flex items-center gap-1.5 uppercase font-semibold">
+            <Wallet size={16} className="text-success" /> Cicilan Utang Masuk
+          </p>
+          <h3 className="text-xl text-success font-bold">Rp {cicilanMasuk.toLocaleString('id-ID')}</h3>
         </div>
         
         {/* Metric 2 */}
@@ -234,9 +262,18 @@ export default async function LaporanPage({
         <div className="bg-surface border border-border rounded-xl p-5 flex flex-col relative overflow-hidden group hover:border-border-muted transition-colors">
           <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
           <p className="text-xs text-text-secondary mb-2 flex items-center gap-1.5 uppercase font-semibold">
-            <TrendingUp size={16} className="text-primary" /> Laba Bersih
+            <TrendingUp size={16} className="text-primary" /> Laba Kas Bersih
           </p>
           <h3 className="text-xl text-primary font-bold">Rp {netProfit.toLocaleString('id-ID')}</h3>
+        </div>
+
+        {/* Piutang Baru */}
+        <div className="bg-surface border border-border rounded-xl p-5 flex flex-col relative overflow-hidden group hover:border-border-muted transition-colors">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+          <p className="text-xs text-text-secondary mb-2 flex items-center gap-1.5 uppercase font-semibold text-amber-500">
+            <ReceiptText size={16} /> Piutang Baru (Utang)
+          </p>
+          <h3 className="text-xl text-amber-500 font-bold">Rp {debtSales.toLocaleString('id-ID')}</h3>
         </div>
 
         {/* Metric 4 */}

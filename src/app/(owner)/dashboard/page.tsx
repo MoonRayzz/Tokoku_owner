@@ -82,6 +82,13 @@ export default async function DashboardPage() {
   // Member
   const memberCount = await prisma.member.count();
 
+  // Piutang Berjalan
+  const debtAgg = await prisma.debt.aggregate({
+    _sum: { remaining: true },
+    where: { status: { not: 'PAID' } }
+  });
+  const totalDebt = debtAgg._sum.remaining || 0;
+
   // Proyeksi Stok (Habis < 7 Hari)
   // Menghitung rata-rata penjualan 7 hari terakhir per produk
   const sevenDaysAgo = startOfDay(subDays(now, 7));
@@ -272,9 +279,9 @@ export default async function DashboardPage() {
           icon={<ReceiptText size={20} />} 
         />
         <StatCard 
-          title="Member Aktif" 
-          value={memberCount} 
-          icon={<Users size={20} />} 
+          title="Piutang Berjalan" 
+          value={`Rp ${totalDebt.toLocaleString('id-ID')}`} 
+          icon={<Banknote size={20} />} 
         />
       </div>
 

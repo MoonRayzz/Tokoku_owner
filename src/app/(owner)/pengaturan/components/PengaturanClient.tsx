@@ -27,6 +27,9 @@ export default function PengaturanClient({ initialEmail }: PengaturanClientProps
   const [storeLongitude, setStoreLongitude] = useState('');
   const [storeRadius, setStoreRadius] = useState(50);
   const [voidPin, setVoidPin] = useState('123456');
+  const [debtEnabled, setDebtEnabled] = useState(false);
+  const [debtLimitPerPerson, setDebtLimitPerPerson] = useState(0);
+  const [debtLimitBehavior, setDebtLimitBehavior] = useState('WARN');
   const [isSavingStore, setIsSavingStore] = useState(false);
 
   // Status State
@@ -53,6 +56,9 @@ export default function PengaturanClient({ initialEmail }: PengaturanClientProps
         setStoreLongitude(data.longitude !== null ? String(data.longitude) : '');
         setStoreRadius(data.radius || 50);
         setVoidPin(data.voidPin || '123456');
+        setDebtEnabled(data.debtEnabled || false);
+        setDebtLimitPerPerson(data.debtLimitPerPerson || 0);
+        setDebtLimitBehavior(data.debtLimitBehavior || 'WARN');
       }
     }
     
@@ -96,6 +102,9 @@ export default function PengaturanClient({ initialEmail }: PengaturanClientProps
         longitude: storeLongitude ? parseFloat(storeLongitude) : null,
         radius: storeRadius,
         voidPin: voidPin,
+        debtEnabled: debtEnabled,
+        debtLimitPerPerson: debtLimitPerPerson,
+        debtLimitBehavior: debtLimitBehavior,
         updatedAt: new Date().toISOString()
       });
       if (error) throw error;
@@ -266,6 +275,51 @@ export default function PengaturanClient({ initialEmail }: PengaturanClientProps
                   <input name="voidPin" value={voidPin} onChange={e => setVoidPin(e.target.value)} type="password" maxLength={6} placeholder="123456" className="w-full bg-background border border-border rounded px-3 py-2 text-text-primary focus:outline-none min-h-[44px] tracking-widest focus:border-primary-container" />
                   <p className="text-xs text-text-secondary mt-1">Gunakan PIN ini untuk membatalkan nota dari kasir lokal.</p>
                 </div>
+              </div>
+
+              <div className="pt-4 border-t border-border mt-2 space-y-4">
+                <h3 className="text-sm font-bold text-text-primary">💳 Kebijakan Utang (Kasbon)</h3>
+                
+                <div className="flex items-center gap-3">
+                  <input 
+                    type="checkbox" 
+                    id="debtEnabled"
+                    checked={debtEnabled}
+                    onChange={(e) => setDebtEnabled(e.target.checked)}
+                    className="w-5 h-5 text-primary-container rounded border-border focus:ring-primary-container"
+                  />
+                  <div>
+                    <label htmlFor="debtEnabled" className="block text-sm font-bold text-text-primary">Aktifkan Fitur Utang</label>
+                    <p className="text-xs text-text-secondary">Izinkan kasir memproses transaksi menggunakan kasbon/utang.</p>
+                  </div>
+                </div>
+
+                {debtEnabled && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3 bg-surface-container-low p-4 rounded-lg border border-border">
+                    <div>
+                      <label className="block text-sm font-bold text-text-primary mb-1">Batas Maksimal Utang per Orang</label>
+                      <input 
+                        type="number" 
+                        value={debtLimitPerPerson} 
+                        onChange={(e) => setDebtLimitPerPerson(Number(e.target.value))}
+                        className="w-full bg-background border border-border rounded px-3 py-2 text-text-primary focus:outline-none focus:border-primary-container"
+                        min="0"
+                      />
+                      <p className="text-xs text-text-secondary mt-1">Isi 0 untuk tanpa batas.</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-text-primary mb-1">Jika Batas Terlampaui</label>
+                      <select 
+                        value={debtLimitBehavior}
+                        onChange={(e) => setDebtLimitBehavior(e.target.value)}
+                        className="w-full bg-background border border-border rounded px-3 py-2 text-text-primary focus:outline-none focus:border-primary-container"
+                      >
+                        <option value="WARN">Hanya Beri Peringatan (Kasir bisa lanjut)</option>
+                        <option value="BLOCK">Blokir Transaksi (Tidak bisa utang)</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
               </div>
               
               <div className="pt-4 border-t border-border mt-2">

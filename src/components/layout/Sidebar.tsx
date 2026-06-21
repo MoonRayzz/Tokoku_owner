@@ -12,7 +12,8 @@ import {
   LogOut,
   CalendarCheck,
   Wallet,
-  ShieldAlert
+  ShieldAlert,
+  BookOpen
 } from 'lucide-react';
 import Logo from '../ui/Logo';
 import { createClient } from '@/app/lib/supabase/client';
@@ -84,6 +85,7 @@ export default function Sidebar() {
     { name: 'Laporan Penjualan', href: '/laporan', icon: BarChart2 },
     { name: 'Audit Void', href: '/laporan/void', icon: ShieldAlert },
     { name: 'Produk', href: '/produk', icon: Box },
+    { name: 'Buku Utang', href: '/buku-utang', icon: BookOpen },
     { name: 'Pengeluaran', href: '/pengeluaran', icon: Wallet },
     { name: 'Pelanggan', href: '/member', icon: Users },
     { name: 'Absensi', href: '/absensi', icon: CalendarCheck },
