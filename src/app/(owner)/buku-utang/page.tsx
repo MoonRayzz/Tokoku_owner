@@ -17,9 +17,10 @@ export default async function BukuUtangPage() {
     .from('Debt')
     .select(`
       *,
-      transaction:Transaction(receiptNumber),
+      transaction:Transaction!inner(receiptNumber, isVoid),
       payments:DebtPayment(*)
     `)
+    .eq('transaction.isVoid', false)
     .order('createdAt', { ascending: false });
 
   if (debtsError) {

@@ -85,7 +85,7 @@ export default async function DashboardPage() {
   // Piutang Berjalan
   const debtAgg = await prisma.debt.aggregate({
     _sum: { remaining: true },
-    where: { status: { not: 'PAID' } }
+    where: { status: { not: 'PAID' }, transaction: { isVoid: false } }
   });
   const totalDebt = debtAgg._sum.remaining || 0;
 
