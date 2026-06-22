@@ -1,4 +1,19 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+
 export default function Loading() {
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    // Delay 300ms sebelum memunculkan loading spinner
+    // Ini mencegah "flash of loading" saat navigasi/login cepat
+    const timer = setTimeout(() => setShow(true), 300);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!show) return null;
+
   return (
     <div className="h-full w-full flex items-center justify-center bg-background min-h-[50vh]">
       <div className="flex flex-col items-center gap-4">

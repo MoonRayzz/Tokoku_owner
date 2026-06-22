@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Employee, Shift, Attendance } from '@prisma/client';
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
-import { Plus, Edit, X, Users, Clock, CalendarDays, Wallet } from 'lucide-react';
+import { Users, Clock, CalendarDays, Wallet, Plus, Edit, X, Download, Filter, Trash2 } from 'lucide-react';
 import { saveEmployee, saveShift } from '../actions';
 import QRGenerator from './QRGenerator';
 import { useToast } from '@/components/ui/Toast';
@@ -68,6 +68,21 @@ export default function AbsensiClient({ attendances, employees, shifts, totalPag
     }
   };
 
+  const handleDeleteEmp = async (emp: Employee) => {
+    if (!confirm(`Apakah Anda yakin ingin menghapus (menonaktifkan) karyawan ${emp.name}? Riwayat absensinya akan tetap tersimpan.`)) return;
+    setLoading(true);
+    const formData = new FormData();
+    formData.append('id', emp.id);
+    formData.append('name', emp.name);
+    formData.append('phone', emp.phone || '');
+    formData.append('role', emp.role);
+    formData.append('wageBase', emp.wageBase.toString());
+    formData.append('wageSolo', emp.wageSolo.toString());
+    formData.append('isActive', 'false'); // Set to nonaktif
+    await saveEmployee(formData);
+    setLoading(false);
+  };
+
   const handleShiftSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
@@ -92,31 +107,31 @@ export default function AbsensiClient({ attendances, employees, shifts, totalPag
       </div>
 
       {/* Tabs */}
-      <div className="flex space-x-1 bg-surface-container-low p-1 rounded-xl border border-border">
+      <div className="flex overflow-x-auto hide-scrollbar space-x-1 bg-surface-container-low p-1 rounded-xl border border-border">
         <button 
           onClick={() => setActiveTab('riwayat')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all ${activeTab === 'riwayat' ? 'bg-surface text-primary-container shadow-sm' : 'text-text-secondary hover:text-text-primary hover:bg-surface/50'}`}
+          className={`whitespace-nowrap flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all ${activeTab === 'riwayat' ? 'bg-surface text-primary-container shadow-sm' : 'text-text-secondary hover:text-text-primary hover:bg-surface/50'}`}
         >
           <CalendarDays size={18} />
           Riwayat Kehadiran
         </button>
         <button 
           onClick={() => setActiveTab('karyawan')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all ${activeTab === 'karyawan' ? 'bg-surface text-primary-container shadow-sm' : 'text-text-secondary hover:text-text-primary hover:bg-surface/50'}`}
+          className={`whitespace-nowrap flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all ${activeTab === 'karyawan' ? 'bg-surface text-primary-container shadow-sm' : 'text-text-secondary hover:text-text-primary hover:bg-surface/50'}`}
         >
           <Users size={18} />
           Data Karyawan
         </button>
         <button 
           onClick={() => setActiveTab('shift')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all ${activeTab === 'shift' ? 'bg-surface text-primary-container shadow-sm' : 'text-text-secondary hover:text-text-primary hover:bg-surface/50'}`}
+          className={`whitespace-nowrap flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all ${activeTab === 'shift' ? 'bg-surface text-primary-container shadow-sm' : 'text-text-secondary hover:text-text-primary hover:bg-surface/50'}`}
         >
           <Clock size={18} />
           Jadwal Shift
         </button>
         <button 
           onClick={() => setActiveTab('rekap')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all ${activeTab === 'rekap' ? 'bg-surface text-primary-container shadow-sm' : 'text-text-secondary hover:text-text-primary hover:bg-surface/50'}`}
+          className={`whitespace-nowrap flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all ${activeTab === 'rekap' ? 'bg-surface text-primary-container shadow-sm' : 'text-text-secondary hover:text-text-primary hover:bg-surface/50'}`}
         >
           <Wallet size={18} />
           Rekap Gaji
@@ -136,14 +151,14 @@ export default function AbsensiClient({ attendances, employees, shifts, totalPag
               <h3 className="text-lg font-bold text-text-primary mb-2">Ringkasan Hari Ini</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-primary-container/10 border border-primary-container/20 rounded-xl p-4">
-                  <p className="text-[11px] font-semibold tracking-wider text-text-secondary uppercase">Karyawan Hadir</p>
-                  <p className="text-3xl font-bold text-primary-container mt-1">
-                    {new Set(attendances.filter(a => a.checkIn && new Date(a.checkIn).toDateString() === new Date().toDateString()).map(a => a.employeeId)).size} orang
+                  <p className="text-[11px] font-semibold tracking-wider text-text-secondary uppercase">Hadir</p>
+                  <p className="text-2xl md:text-3xl font-bold text-primary-container mt-1">
+                    {new Set(attendances.filter(a => a.checkIn && new Date(a.checkIn).toDateString() === new Date().toDateString()).map(a => a.employeeId)).size} org
                   </p>
                 </div>
                 <div className="bg-secondary/10 border border-secondary/20 rounded-xl p-4">
-                  <p className="text-[11px] font-semibold tracking-wider text-text-secondary uppercase">Total Estimasi Upah</p>
-                  <p className="text-3xl font-bold text-secondary mt-1">
+                  <p className="text-[11px] font-semibold tracking-wider text-text-secondary uppercase">Total Upah</p>
+                  <p className="text-2xl md:text-3xl font-bold text-secondary mt-1 whitespace-nowrap">
                     Rp {attendances.filter(a => a.checkIn && new Date(a.checkIn).toDateString() === new Date().toDateString()).reduce((sum, a) => sum + (a.totalWage || 0), 0).toLocaleString('id-ID')}
                   </p>
                 </div>
@@ -162,12 +177,12 @@ export default function AbsensiClient({ attendances, employees, shifts, totalPag
             <table className="w-full text-left">
               <thead className="bg-surface-container-high text-text-secondary text-[11px] uppercase tracking-wider border-b border-border">
                 <tr>
-                  <th className="px-6 py-4 font-semibold">Tanggal</th>
-                  <th className="px-6 py-4 font-semibold">Karyawan</th>
-                  <th className="px-6 py-4 font-semibold">Shift</th>
-                  <th className="px-6 py-4 font-semibold">Check In</th>
-                  <th className="px-6 py-4 font-semibold">Check Out</th>
-                  <th className="px-6 py-4 font-semibold">Total Upah</th>
+                  <th className="px-4 md:px-6 py-4 font-semibold whitespace-nowrap">Tanggal</th>
+                  <th className="px-4 md:px-6 py-4 font-semibold whitespace-nowrap">Karyawan</th>
+                  <th className="px-4 md:px-6 py-4 font-semibold whitespace-nowrap">Shift</th>
+                  <th className="px-4 md:px-6 py-4 font-semibold whitespace-nowrap">Check In</th>
+                  <th className="px-4 md:px-6 py-4 font-semibold whitespace-nowrap">Check Out</th>
+                  <th className="px-4 md:px-6 py-4 font-semibold whitespace-nowrap">Total Upah</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -176,18 +191,18 @@ export default function AbsensiClient({ attendances, employees, shifts, totalPag
                 ) : (
                   attendances.map(a => (
                     <tr key={a.id} className="hover:bg-surface-container transition-colors">
-                      <td className="px-6 py-4 font-semibold text-text-primary">
+                      <td className="px-4 md:px-6 py-4 font-semibold text-text-primary whitespace-nowrap">
                         {format(new Date(a.date), 'dd MMM yyyy', { locale: id })}
                       </td>
-                      <td className="px-6 py-4 font-bold text-text-primary">{a.employee.name}</td>
-                      <td className="px-6 py-4 text-text-secondary">{a.shift?.name || '-'}</td>
-                      <td className="px-6 py-4 text-primary-container font-semibold">
+                      <td className="px-4 md:px-6 py-4 font-bold text-text-primary whitespace-nowrap">{a.employee.name}</td>
+                      <td className="px-4 md:px-6 py-4 text-text-secondary whitespace-nowrap">{a.shift?.name || '-'}</td>
+                      <td className="px-4 md:px-6 py-4 text-primary-container font-semibold whitespace-nowrap">
                         {a.checkIn ? format(new Date(a.checkIn), 'HH:mm') : '-'}
                       </td>
-                      <td className="px-6 py-4 text-warning font-semibold">
+                      <td className="px-4 md:px-6 py-4 text-warning font-semibold whitespace-nowrap">
                         {a.checkOut ? format(new Date(a.checkOut), 'HH:mm') : '-'}
                       </td>
-                      <td className="px-6 py-4 font-bold text-text-primary">
+                      <td className="px-4 md:px-6 py-4 font-bold text-text-primary whitespace-nowrap">
                         {a.totalWage ? `Rp ${a.totalWage.toLocaleString('id-ID')}` : '-'}
                         {a.isSolo && <span className="ml-2 text-[10px] bg-secondary/10 text-secondary px-2 py-0.5 rounded">SOLO</span>}
                       </td>
@@ -223,33 +238,40 @@ export default function AbsensiClient({ attendances, employees, shifts, totalPag
             <table className="w-full text-left">
               <thead className="bg-surface-container-high text-text-secondary text-[11px] uppercase tracking-wider border-b border-border">
                 <tr>
-                  <th className="px-6 py-4 font-semibold">Nama</th>
-                  <th className="px-6 py-4 font-semibold">Role</th>
-                  <th className="px-6 py-4 font-semibold text-right">Upah Dasar (Shift)</th>
-                  <th className="px-6 py-4 font-semibold text-right">Upah Jaga Sendiri</th>
-                  <th className="px-6 py-4 font-semibold text-center">Status</th>
-                  <th className="px-6 py-4 font-semibold text-center">Aksi</th>
+                  <th className="px-4 md:px-6 py-4 font-semibold whitespace-nowrap">Nama</th>
+                  <th className="px-4 md:px-6 py-4 font-semibold whitespace-nowrap">Role</th>
+                  <th className="px-4 md:px-6 py-4 font-semibold text-right whitespace-nowrap">Upah Dasar (Shift)</th>
+                  <th className="px-4 md:px-6 py-4 font-semibold text-right whitespace-nowrap">Upah Jaga Sendiri</th>
+                  <th className="px-4 md:px-6 py-4 font-semibold text-center whitespace-nowrap">Status</th>
+                  <th className="px-4 md:px-6 py-4 font-semibold text-center whitespace-nowrap">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {employees.map(emp => (
                   <tr key={emp.id} className="hover:bg-surface-container transition-colors">
-                    <td className="px-6 py-4">
+                    <td className="px-4 md:px-6 py-4 whitespace-nowrap">
                       <div className="font-bold text-text-primary">{emp.name}</div>
                       <div className="text-xs text-text-secondary">{emp.phone || '-'}</div>
                     </td>
-                    <td className="px-6 py-4 text-sm capitalize">{emp.role}</td>
-                    <td className="px-6 py-4 text-right font-semibold text-primary-container">Rp {emp.wageBase.toLocaleString('id-ID')}</td>
-                    <td className="px-6 py-4 text-right font-semibold text-secondary">Rp {emp.wageSolo.toLocaleString('id-ID')}</td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-4 md:px-6 py-4 text-sm capitalize whitespace-nowrap">{emp.role}</td>
+                    <td className="px-4 md:px-6 py-4 text-right font-semibold text-primary-container whitespace-nowrap">Rp {emp.wageBase.toLocaleString('id-ID')}</td>
+                    <td className="px-4 md:px-6 py-4 text-right font-semibold text-secondary whitespace-nowrap">Rp {emp.wageSolo.toLocaleString('id-ID')}</td>
+                    <td className="px-4 md:px-6 py-4 text-center whitespace-nowrap">
                       <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${emp.isActive ? 'bg-primary-container/10 text-primary-container border border-primary-container/20' : 'bg-surface-container-highest text-text-secondary border border-border'}`}>
                         {emp.isActive ? 'Aktif' : 'Nonaktif'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-center">
-                      <button onClick={() => openEmpModal(emp)} className="p-2 text-text-secondary hover:text-primary-container rounded-lg">
-                        <Edit size={16} />
-                      </button>
+                    <td className="px-4 md:px-6 py-4 text-center whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-1">
+                        <button onClick={() => openEmpModal(emp)} className="p-2 text-text-secondary hover:text-primary-container rounded-lg" title="Edit">
+                          <Edit size={16} />
+                        </button>
+                        {emp.isActive && (
+                          <button onClick={() => handleDeleteEmp(emp)} className="p-2 text-text-secondary hover:text-error rounded-lg" title="Hapus / Nonaktifkan">
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -275,25 +297,25 @@ export default function AbsensiClient({ attendances, employees, shifts, totalPag
             <table className="w-full text-left">
               <thead className="bg-surface-container-high text-text-secondary text-[11px] uppercase tracking-wider border-b border-border">
                 <tr>
-                  <th className="px-6 py-4 font-semibold">Nama Shift</th>
-                  <th className="px-6 py-4 font-semibold">Jam Mulai</th>
-                  <th className="px-6 py-4 font-semibold">Jam Selesai</th>
-                  <th className="px-6 py-4 font-semibold text-center">Status</th>
-                  <th className="px-6 py-4 font-semibold text-center">Aksi</th>
+                  <th className="px-4 md:px-6 py-4 font-semibold whitespace-nowrap">Nama Shift</th>
+                  <th className="px-4 md:px-6 py-4 font-semibold whitespace-nowrap">Jam Mulai</th>
+                  <th className="px-4 md:px-6 py-4 font-semibold whitespace-nowrap">Jam Selesai</th>
+                  <th className="px-4 md:px-6 py-4 font-semibold text-center whitespace-nowrap">Status</th>
+                  <th className="px-4 md:px-6 py-4 font-semibold text-center whitespace-nowrap">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {shifts.map(shift => (
                   <tr key={shift.id} className="hover:bg-surface-container transition-colors">
-                    <td className="px-6 py-4 font-bold text-text-primary">{shift.name}</td>
-                    <td className="px-6 py-4 text-text-secondary font-semibold">{shift.startTime}</td>
-                    <td className="px-6 py-4 text-text-secondary font-semibold">{shift.endTime}</td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-4 md:px-6 py-4 font-bold text-text-primary whitespace-nowrap">{shift.name}</td>
+                    <td className="px-4 md:px-6 py-4 text-text-secondary font-semibold whitespace-nowrap">{shift.startTime}</td>
+                    <td className="px-4 md:px-6 py-4 text-text-secondary font-semibold whitespace-nowrap">{shift.endTime}</td>
+                    <td className="px-4 md:px-6 py-4 text-center whitespace-nowrap">
                       <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${shift.isActive ? 'bg-primary-container/10 text-primary-container border border-primary-container/20' : 'bg-surface-container-highest text-text-secondary border border-border'}`}>
                         {shift.isActive ? 'Aktif' : 'Nonaktif'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-4 md:px-6 py-4 text-center whitespace-nowrap">
                       <button onClick={() => openShiftModal(shift)} className="p-2 text-text-secondary hover:text-primary-container rounded-lg">
                         <Edit size={16} />
                       </button>

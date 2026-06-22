@@ -22,9 +22,40 @@ export default function AbsenClient({ employees, shifts, storeProfile }: { emplo
   const [error, setError] = useState<string | null>(null);
 
   const detectCurrentShift = (): Shift | null => {
+    if (shifts.length === 0) return null;
+    
     const now = new Date();
-    const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    return shifts.find(s => currentTime >= s.startTime && currentTime < s.endTime) ?? null;
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+    let closestShift: Shift | null = null;
+    let minDiff = Infinity;
+
+    for (const s of shifts) {
+      const [startH, startM] = s.startTime.split(':').map(Number);
+      const [endH, endM] = s.endTime.split(':').map(Number);
+      
+      const startMinutes = startH * 60 + startM;
+      let endMinutes = endH * 60 + endM;
+      if (endMinutes < startMinutes) endMinutes += 24 * 60; // Overnight shift
+
+      let checkMinutes = currentMinutes;
+      if (endMinutes > 24 * 60 && currentMinutes < startMinutes) {
+          checkMinutes += 24 * 60;
+      }
+
+      // Toleransi 90 menit sebelum mulai dan 90 menit setelah selesai
+      if (checkMinutes >= startMinutes - 90 && checkMinutes <= endMinutes + 90) {
+        return s;
+      }
+      
+      const diff = Math.abs(checkMinutes - startMinutes);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestShift = s;
+      }
+    }
+    
+    return closestShift || shifts[0] || null;
   };
 
   const handleSelectEmployee = async (empId: string) => {

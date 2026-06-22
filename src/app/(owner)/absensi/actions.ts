@@ -7,7 +7,7 @@ export async function saveEmployee(formData: FormData) {
   const id = formData.get('id') as string | null;
   const name = formData.get('name') as string;
   const phone = formData.get('phone') as string;
-  const role = formData.get('role') as string || 'kasir';
+  const role = formData.get('role') as string || 'karyawan';
   const isActive = formData.get('isActive') === 'true';
   const wageBase = parseFloat(formData.get('wageBase') as string);
   const wageSolo = parseFloat(formData.get('wageSolo') as string);
