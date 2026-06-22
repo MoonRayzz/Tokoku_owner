@@ -41,8 +41,9 @@ export default async function LaporanPage({
   const todayStr = format(now, 'yyyy-MM-dd');
   
   // Parse date or default to today
-  const startDate = startParam ? new Date(`${startParam}T00:00:00`) : startOfDay(now);
-  const endDate = endParam ? new Date(`${endParam}T23:59:59`) : endOfDay(now);
+  const isAllTime = startParam === 'all';
+  const startDate = isAllTime ? new Date('2020-01-01T00:00:00') : (startParam ? new Date(`${startParam}T00:00:00`) : startOfDay(now));
+  const endDate = isAllTime ? endOfDay(now) : (endParam ? new Date(`${endParam}T23:59:59`) : endOfDay(now));
 
   // Ambil daftar shift untuk filter
   const shifts = await prisma.shift.findMany({ where: { isActive: true } });
@@ -188,6 +189,12 @@ export default async function LaporanPage({
           >
             30 Hari Terakhir
           </Link>
+          <Link 
+            href="/laporan?start=all"
+            className={`px-4 py-2 rounded-full text-sm transition-colors ${isAllTime ? 'bg-primary-container text-on-primary-container font-semibold shadow-sm' : 'text-text-secondary hover:bg-surface-variant hover:text-text-primary border border-transparent'}`}
+          >
+            Semua Waktu
+          </Link>
           <div className="flex bg-surface border border-border rounded-lg px-2 items-center h-9 shadow-sm ml-2">
             <span className="material-symbols-outlined text-text-secondary text-[16px] mr-2">schedule</span>
             <div className="flex gap-1">
@@ -211,7 +218,7 @@ export default async function LaporanPage({
         </div>
         <div className="flex gap-3 w-full lg:w-auto">
           <a 
-            href={`/api/export/laporan?type=excel&start=${startParam || todayStr}&end=${endParam || todayStr}`}
+            href={isAllTime ? `/api/export/laporan?type=excel&start=all${shiftParam ? `&shift=${shiftParam}` : ''}` : `/api/export/laporan?type=excel&start=${startParam || todayStr}&end=${endParam || todayStr}${shiftParam ? `&shift=${shiftParam}` : ''}`}
             target="_blank"
             rel="noreferrer"
             className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold border border-primary/30 text-primary hover:bg-primary/10 transition-colors"
@@ -219,7 +226,7 @@ export default async function LaporanPage({
             <Download size={18} /> Unduh Excel
           </a>
           <a 
-            href={`/api/export/laporan?type=pdf&start=${startParam || todayStr}&end=${endParam || todayStr}`}
+            href={isAllTime ? `/api/export/laporan?type=pdf&start=all${shiftParam ? `&shift=${shiftParam}` : ''}` : `/api/export/laporan?type=pdf&start=${startParam || todayStr}&end=${endParam || todayStr}${shiftParam ? `&shift=${shiftParam}` : ''}`}
             target="_blank"
             rel="noreferrer"
             className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold border border-secondary/30 text-secondary hover:bg-secondary/10 transition-colors"
