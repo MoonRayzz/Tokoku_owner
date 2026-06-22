@@ -62,7 +62,10 @@ export async function addExpense(formData: FormData) {
 
 export async function deleteExpense(id: string) {
   try {
-    await prisma.expense.delete({ where: { id } });
+    await prisma.expense.update({ 
+      where: { id },
+      data: { isVoid: true, syncStatus: 'SYNCED' }
+    });
     revalidatePath('/pengeluaran');
     revalidatePath('/dashboard');
     return { success: true };

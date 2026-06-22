@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
   const expenses = await prisma.expense.findMany({
     where: {
       date: { gte: start, lte: end },
+      isVoid: false,
       ...(shiftParam ? { shiftId: shiftParam } : {})
     },
     include: {

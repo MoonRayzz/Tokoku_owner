@@ -93,6 +93,7 @@ export default async function LaporanPage({
   const expenseAggregate = await prisma.expense.aggregate({
     where: {
       date: { gte: startDate, lte: endDate },
+      isVoid: false,
       ...(shiftParam ? { shiftId: shiftParam } : {})
     },
     _sum: { amount: true }

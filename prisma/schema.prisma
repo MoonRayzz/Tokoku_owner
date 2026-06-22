@@ -187,6 +187,7 @@ model Expense {
   updatedAt   DateTime @updatedAt
   employee    Employee @relation(fields: [employeeId], references: [id])
   shift       Shift?   @relation(fields: [shiftId], references: [id])
+  isVoid      Boolean  @default(false)
 
   @@index([date])
   @@index([syncStatus])

@@ -13,7 +13,10 @@ export async function GET(request: Request) {
     if (endDate) dateFilter.lte = new Date(`${endDate}T23:59:59.999Z`);
 
     const expenses = await prisma.expense.findMany({
-      where: Object.keys(dateFilter).length > 0 ? { date: dateFilter } : undefined,
+      where: {
+        ...(Object.keys(dateFilter).length > 0 ? { date: dateFilter } : {}),
+        isVoid: false
+      },
       orderBy: { date: 'desc' },
       include: { employee: true }
     });

@@ -46,11 +46,11 @@ export default async function DashboardPage() {
       _count: { id: true }
     }),
     prisma.expense.aggregate({
-      where: { date: { gte: todayStart, lte: todayEnd } },
+      where: { date: { gte: todayStart, lte: todayEnd }, isVoid: false },
       _sum: { amount: true }
     }),
     prisma.expense.aggregate({
-      where: { date: { gte: yesterdayStart, lte: yesterdayEnd } },
+      where: { date: { gte: yesterdayStart, lte: yesterdayEnd }, isVoid: false },
       _sum: { amount: true }
     }),
     prisma.$queryRaw<any[]>`SELECT SUM(COALESCE(td."priceBuyAtTime", 0) * td."quantity") as hpp FROM "TransactionDetail" td JOIN "Transaction" t ON t.id = td."transactionId" WHERE t."createdAt" >= ${todayStart} AND t."createdAt" <= ${todayEnd} AND t."isVoid" = false`,

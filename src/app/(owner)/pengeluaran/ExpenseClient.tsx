@@ -21,6 +21,7 @@ interface Expense {
   employee?: { name: string };
   shift?: { name: string };
   syncStatus: string;
+  isVoid: boolean;
 }
 
 interface ExpenseClientProps {
@@ -133,9 +134,9 @@ export default function ExpenseClient({ expenses, totalPages, totalCount, curren
 
   const handleDelete = async (id: string) => {
     const isConfirmed = await confirm({
-      title: 'Hapus Pengeluaran',
-      message: 'Apakah Anda yakin ingin menghapus pengeluaran ini? Tindakan ini tidak dapat dibatalkan.',
-      confirmLabel: 'Ya, Hapus',
+      title: 'Batalkan Pengeluaran',
+      message: 'Apakah Anda yakin ingin membatalkan pengeluaran ini? Pengeluaran yang dibatalkan tidak akan dihitung dalam laporan keuangan.',
+      confirmLabel: 'Ya, Batalkan',
       variant: 'danger'
     });
     
@@ -303,13 +304,13 @@ export default function ExpenseClient({ expenses, totalPages, totalCount, curren
                     </tr>
                   ) : (
                     expenses.map(exp => (
-                      <tr key={exp.id} className="hover:bg-surface-container transition-colors">
+                      <tr key={exp.id} className={`hover:bg-surface-container transition-colors ${exp.isVoid ? 'opacity-50 line-through grayscale' : ''}`}>
                         <td className="px-5 py-3 text-sm text-text-primary whitespace-nowrap">
                           {format(new Date(exp.date), 'dd MMM yyyy, HH:mm', { locale: localeId })}
                         </td>
                         <td className="px-5 py-3 text-sm font-medium text-text-primary">
-                          <span className="bg-surface-container-highest px-2 py-1 rounded text-xs">
-                            {exp.category}
+                          <span className={`px-2 py-1 rounded text-xs ${exp.isVoid ? 'bg-error/20 text-error' : 'bg-surface-container-highest'}`}>
+                            {exp.isVoid ? 'DIBATALKAN' : exp.category}
                           </span>
                         </td>
                         <td className="px-5 py-3 text-sm text-text-secondary max-w-[200px] truncate">
@@ -325,13 +326,17 @@ export default function ExpenseClient({ expenses, totalPages, totalCount, curren
                           Rp {exp.amount.toLocaleString('id-ID')}
                         </td>
                         <td className="px-5 py-3 text-center">
-                          <button 
-                            onClick={() => handleDelete(exp.id)}
-                            className="p-1.5 text-text-secondary hover:text-error hover:bg-error/10 rounded-lg transition-all"
-                            title="Hapus"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                          {exp.isVoid ? (
+                            <span className="text-xs text-error font-bold">Dibatalkan</span>
+                          ) : (
+                            <button 
+                              onClick={() => handleDelete(exp.id)}
+                              className="p-1.5 text-text-secondary hover:text-error hover:bg-error/10 rounded-lg transition-all"
+                              title="Batalkan"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))
