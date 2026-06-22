@@ -64,19 +64,23 @@ export default async function LaporanPage({
   // Optimasi: Hitung total omzet (NON-UTANG)
   const aggregate = await prisma.transaction.aggregate({
     where: { ...whereClause, paymentMethod: { not: 'utang' } },
-    _sum: { totalAmount: true },
+    _sum: { totalAmount: true, discountAmount: true },
     _count: { id: true }
   });
 
-  const totalSales = aggregate._sum.totalAmount || 0;
+  const totalSalesRaw = aggregate._sum.totalAmount || 0;
+  const totalDiscount = aggregate._sum.discountAmount || 0;
+  const totalSales = totalSalesRaw - totalDiscount;
   
   // Total Transaksi Utang Baru
   const debtAggregate = await prisma.transaction.aggregate({
     where: { ...whereClause, paymentMethod: 'utang' },
-    _sum: { totalAmount: true },
+    _sum: { totalAmount: true, discountAmount: true },
     _count: { id: true }
   });
-  const debtSales = debtAggregate._sum.totalAmount || 0;
+  const debtSalesRaw = debtAggregate._sum.totalAmount || 0;
+  const debtDiscount = debtAggregate._sum.discountAmount || 0;
+  const debtSales = debtSalesRaw - debtDiscount;
   
   const totalCount = aggregate._count.id + debtAggregate._count.id;
 

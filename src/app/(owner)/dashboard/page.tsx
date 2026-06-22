@@ -37,12 +37,12 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     prisma.transaction.aggregate({
       where: { createdAt: { gte: todayStart, lte: todayEnd }, isVoid: false },
-      _sum: { totalAmount: true },
+      _sum: { totalAmount: true, discountAmount: true },
       _count: { id: true }
     }),
     prisma.transaction.aggregate({
       where: { createdAt: { gte: yesterdayStart, lte: yesterdayEnd }, isVoid: false },
-      _sum: { totalAmount: true },
+      _sum: { totalAmount: true, discountAmount: true },
       _count: { id: true }
     }),
     prisma.expense.aggregate({
@@ -57,11 +57,17 @@ export default async function DashboardPage() {
     prisma.$queryRaw<any[]>`SELECT SUM(COALESCE(td."priceBuyAtTime", 0) * td."quantity") as hpp FROM "TransactionDetail" td JOIN "Transaction" t ON t.id = td."transactionId" WHERE t."createdAt" >= ${yesterdayStart} AND t."createdAt" <= ${yesterdayEnd} AND t."isVoid" = false`
   ]);
 
-  const totalSales = todayTxAgg._sum.totalAmount || 0;
+  const totalSalesRaw = todayTxAgg._sum.totalAmount || 0;
+  const totalDiscount = todayTxAgg._sum.discountAmount || 0;
+  const totalSales = totalSalesRaw - totalDiscount;
+
   const txCount = todayTxAgg._count.id;
   const avgOrder = txCount > 0 ? totalSales / txCount : 0;
 
-  const yesterdaySales = yesterdayTxAgg._sum.totalAmount || 0;
+  const yesterdaySalesRaw = yesterdayTxAgg._sum.totalAmount || 0;
+  const yesterdayDiscount = yesterdayTxAgg._sum.discountAmount || 0;
+  const yesterdaySales = yesterdaySalesRaw - yesterdayDiscount;
+  
   const yesterdayCount = yesterdayTxAgg._count.id;
 
   const totalExpense = todayExpenseAgg._sum.amount || 0;
@@ -160,7 +166,7 @@ export default async function DashboardPage() {
 
   // Data 7 hari untuk chart
   const chartSalesRaw: any[] = await prisma.$queryRaw`
-    SELECT DATE_TRUNC('day', "createdAt") as day, SUM("totalAmount") as amount
+    SELECT DATE_TRUNC('day', "createdAt") as day, SUM("totalAmount" - "discountAmount") as amount
     FROM "Transaction"
     WHERE "createdAt" >= ${sevenDaysAgo} AND "createdAt" <= ${todayEnd} AND "isVoid" = false
     GROUP BY DATE_TRUNC('day', "createdAt")

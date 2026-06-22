@@ -47,7 +47,7 @@ export default async function MemberPage({
       m.phone,
       m."joinedAt",
       COALESCE(COUNT(t.id), 0) as "totalTransactions",
-      COALESCE(SUM(t."totalAmount"), 0) as "totalSpent",
+      COALESCE(SUM(t."totalAmount" - t."discountAmount"), 0) as "totalSpent",
       MAX(t."createdAt") as "lastSold"
     FROM "Member" m
     LEFT JOIN "Transaction" t ON t."memberId" = m.id AND t."isVoid" = false

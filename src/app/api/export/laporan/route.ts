@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
       SELECT 
         DATE(t."createdAt") as date,
         COUNT(t.id) as count,
-        SUM(t."totalAmount") as omzet,
+        SUM(t."totalAmount" - t."discountAmount") as omzet,
         SUM(COALESCE(td."priceBuyAtTime", 0) * td."quantity") as hpp
       FROM "Transaction" t
       LEFT JOIN "TransactionDetail" td ON td."transactionId" = t.id
@@ -145,8 +145,9 @@ export async function GET(request: NextRequest) {
         totalHpp += (d.priceBuyAtTime || 0) * d.quantity;
         itemsList.push(`${d.product.name} (×${d.quantity})`);
       });
-      const profit = tx.totalAmount - totalHpp;
-      const margin = tx.totalAmount > 0 ? (profit / tx.totalAmount) * 100 : 0;
+      const netto = tx.totalAmount - tx.discountAmount;
+      const profit = netto - totalHpp;
+      const margin = netto > 0 ? (profit / netto) * 100 : 0;
       const shiftName = tx.shiftId ? (shiftMap.get(tx.shiftId) || '-') : '-';
 
       const row = ws1.addRow({
@@ -156,7 +157,7 @@ export async function GET(request: NextRequest) {
         shift:  shiftName,
         member: tx.member?.name || 'Umum',
         metode: tx.paymentMethod.toUpperCase(),
-        omzet:  tx.totalAmount,
+        omzet:  netto,
         hpp:    totalHpp,
         profit: profit,
         margin: parseFloat(margin.toFixed(2)),
@@ -277,10 +278,11 @@ export async function GET(request: NextRequest) {
       tx.details.forEach(d => { txHpp += (d.priceBuyAtTime || 0) * d.quantity; });
       totalHppAll += txHpp;
       
+      const netto = tx.totalAmount - tx.discountAmount;
       if (tx.paymentMethod === 'utang') {
-        totalPiutangBaru += tx.totalAmount;
+        totalPiutangBaru += netto;
       } else {
-        totalOmzetTunai += tx.totalAmount;
+        totalOmzetTunai += netto;
       }
     });
     
@@ -342,7 +344,7 @@ export async function GET(request: NextRequest) {
       const existing = methodGroups.get(method) || { count: 0, total: 0 };
       methodGroups.set(method, {
         count: existing.count + 1,
-        total: existing.total + tx.totalAmount
+        total: existing.total + (tx.totalAmount - tx.discountAmount)
       });
     });
 
@@ -494,7 +496,7 @@ export async function GET(request: NextRequest) {
       t.member?.name ?? '-',
       t.cashierName,
       t.paymentMethod.toUpperCase(),
-      t.totalAmount.toLocaleString('id-ID')
+      (t.totalAmount - t.discountAmount).toLocaleString('id-ID')
     ]);
 
     (doc as any).autoTable({
