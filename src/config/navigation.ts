@@ -7,13 +7,15 @@ import {
   CalendarCheck,
   Wallet,
   ShieldAlert,
-  BookOpen
+  BookOpen,
+  Calculator
 } from 'lucide-react';
 
 export const ownerNavItems = [
   { name: 'Beranda', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Laporan Penjualan', href: '/laporan', icon: BarChart2 },
   { name: 'Audit Void', href: '/laporan/void', icon: ShieldAlert },
+  { name: 'Audit Kasir', href: '/rekap-kasir', icon: Calculator },
   { name: 'Produk', href: '/produk', icon: Box },
   { name: 'Buku Utang', href: '/buku-utang', icon: BookOpen },
   { name: 'Pengeluaran', href: '/pengeluaran', icon: Wallet },
