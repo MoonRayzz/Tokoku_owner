@@ -11,7 +11,7 @@ export async function updateProduct(formData: FormData) {
     const priceRetail = parseFloat(formData.get('priceRetail') as string);
     const priceBuyStr = formData.get('priceBuy') as string;
     const priceBuy = priceBuyStr ? parseFloat(priceBuyStr) : null;
-    const stock = parseInt(formData.get('stock') as string) || 0;
+    const stock = parseInt(formData.get('stock') as string);
     const priceWholesaleStr = formData.get('priceWholesale') as string;
     const wholesaleMinQtyStr = formData.get('wholesaleMinQty') as string;
     const minStockAlert = parseInt(formData.get('minStockAlert') as string) || 5;
@@ -30,7 +30,6 @@ export async function updateProduct(formData: FormData) {
         sku,
         priceBuy,
         priceRetail,
-        stock,
         priceWholesale,
         wholesaleMinQty,
         minStockAlert

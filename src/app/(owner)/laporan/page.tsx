@@ -374,6 +374,8 @@ export default async function LaporanPage({
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${
                           tx.paymentMethod.toLowerCase() === 'cash' || tx.paymentMethod.toLowerCase() === 'tunai'
                             ? 'bg-primary/10 text-primary border-primary/20'
+                            : tx.paymentMethod.toLowerCase() === 'utang'
+                            ? 'bg-amber-500/10 text-amber-600 border-amber-500/30'
                             : 'bg-surface-bright text-text-primary border-border'
                         }`}>
                           {tx.paymentMethod.toUpperCase()}

@@ -308,13 +308,16 @@ export default function ProductClient({ products, totalPages, totalCount, curren
               </div>
               
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-text-secondary uppercase">Stok</label>
+                <label className="text-xs font-semibold text-text-secondary uppercase flex items-center justify-between">
+                  <span>Stok Fisik Saat Ini</span>
+                  <span className="text-[10px] bg-surface-container-high px-2 py-0.5 rounded-full text-text-secondary font-medium">Read-only</span>
+                </label>
                 <input 
                   type="number" 
                   name="stock" 
                   defaultValue={editingProduct.stock} 
-                  required 
-                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-text-primary outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container"
+                  readOnly 
+                  className="w-full bg-surface-container-low border border-border rounded-lg px-3 py-2 text-sm text-text-secondary outline-none cursor-not-allowed font-medium"
                 />
               </div>
 
@@ -353,7 +356,8 @@ export default function ProductClient({ products, totalPages, totalCount, curren
               <div className="bg-primary-container/10 p-3 rounded-lg border border-primary-container/20 flex gap-2">
                 <Info size={16} className="text-primary-container flex-shrink-0 mt-0.5" />
                 <p className="text-xs text-text-secondary leading-relaxed">
-                  Perubahan akan disinkronkan secara otomatis ke kasir yang terhubung.
+                  Perubahan harga dan minimum stok akan disinkronkan secara otomatis ke kasir. <br/>
+                  <strong className="text-primary-container font-semibold">Catatan:</strong> Stok fisik hanya dapat diubah melalui aplikasi Kasir Lokal atau fitur Terima PO untuk menjaga akurasi data operasional toko.
                 </p>
               </div>
 

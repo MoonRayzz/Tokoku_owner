@@ -15,7 +15,7 @@ if (globalForPrisma.prisma) {
 } else {
   const pool = new Pool({ 
     connectionString,
-    max: 20, // max connection pool limit
+    max: 10, // max connection pool limit (lowered to prevent EMAXCONNSESSION)
     connectionTimeoutMillis: 10000, // connection timeout
     idleTimeoutMillis: 30000 // idle timeout
   });
