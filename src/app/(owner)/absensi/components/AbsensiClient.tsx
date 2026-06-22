@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Employee, Shift, Attendance } from '@prisma/client';
+import { Employee, Shift, Attendance, SalaryPayout } from '@prisma/client';
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
 import { Users, Clock, CalendarDays, Wallet, Plus, Edit, X, Download, Filter, Trash2 } from 'lucide-react';
 import { saveEmployee, saveShift } from '../actions';
 import QRGenerator from './QRGenerator';
 import { useToast } from '@/components/ui/Toast';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 import RekapGajiClient from './RekapGajiClient';
 import Pagination from '@/components/ui/Pagination';
 
@@ -18,15 +19,29 @@ interface AttendanceWithRelations extends Attendance {
 
 interface AbsensiClientProps {
   attendances: AttendanceWithRelations[];
+  unpaidAttendances: AttendanceWithRelations[];
   employees: Employee[];
   shifts: Shift[];
+  salaryPayouts: (SalaryPayout & { employee: Employee; attendances: Attendance[] })[];
   totalPages: number;
   totalCount: number;
   currentPage: number;
   limit: number;
+  storeName: string;
 }
 
-export default function AbsensiClient({ attendances, employees, shifts, totalPages, totalCount, currentPage, limit }: AbsensiClientProps) {
+export default function AbsensiClient({ 
+  attendances, 
+  unpaidAttendances,
+  employees, 
+  shifts, 
+  salaryPayouts,
+  totalPages, 
+  totalCount, 
+  currentPage, 
+  limit,
+  storeName
+}: AbsensiClientProps) {
   const [activeTab, setActiveTab] = useState<'riwayat' | 'karyawan' | 'shift' | 'rekap'>('riwayat');
   const [isEmpModalOpen, setIsEmpModalOpen] = useState(false);
   const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
@@ -34,6 +49,7 @@ export default function AbsensiClient({ attendances, employees, shifts, totalPag
   const [editingShift, setEditingShift] = useState<Shift | null>(null);
   const [loading, setLoading] = useState(false);
   const toast = useToast();
+  const { confirm } = useConfirm();
 
   const openEmpModal = (emp?: Employee) => {
     setEditingEmp(emp || null);
@@ -69,7 +85,14 @@ export default function AbsensiClient({ attendances, employees, shifts, totalPag
   };
 
   const handleDeleteEmp = async (emp: Employee) => {
-    if (!confirm(`Apakah Anda yakin ingin menghapus (menonaktifkan) karyawan ${emp.name}? Riwayat absensinya akan tetap tersimpan.`)) return;
+    const isConfirmed = await confirm({
+      title: 'Hapus Karyawan',
+      message: `Apakah Anda yakin ingin menghapus (menonaktifkan) karyawan ${emp.name}? Riwayat absensinya akan tetap tersimpan.`,
+      confirmLabel: 'Ya, Nonaktifkan',
+      variant: 'danger'
+    });
+    if (!isConfirmed) return;
+    
     setLoading(true);
     const formData = new FormData();
     formData.append('id', emp.id);
@@ -140,7 +163,12 @@ export default function AbsensiClient({ attendances, employees, shifts, totalPag
 
       {/* Tab Content: Rekap Gaji */}
       {activeTab === 'rekap' && (
-        <RekapGajiClient attendances={attendances} employees={employees} />
+        <RekapGajiClient 
+          unpaidAttendances={unpaidAttendances}
+          employees={employees} 
+          salaryPayouts={salaryPayouts} 
+          storeName={storeName}
+        />
       )}
 
       {/* Tab Content: Riwayat */}

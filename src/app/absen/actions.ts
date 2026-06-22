@@ -3,9 +3,10 @@
 import { prisma } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 
-export async function checkTodayStatus(employeeId: string) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+export async function checkTodayStatus(employeeId: string, clientStartOfDayIso?: string) {
+  // Fallback if not provided (should be provided by new clients)
+  const today = clientStartOfDayIso ? new Date(clientStartOfDayIso) : new Date();
+  if (!clientStartOfDayIso) today.setHours(0, 0, 0, 0);
 
   const attendance = await prisma.attendance.findFirst({
     where: {
@@ -22,11 +23,11 @@ export async function checkTodayStatus(employeeId: string) {
   return { status: 'checked-out', attendanceId: attendance.id };
 }
 
-export async function submitCheckIn(employeeId: string, shiftId: string | null, notes: string) {
+export async function submitCheckIn(employeeId: string, shiftId: string | null, notes: string, clientStartOfDayIso?: string, clientNowIso?: string) {
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const now = new Date();
+    const today = clientStartOfDayIso ? new Date(clientStartOfDayIso) : new Date();
+    if (!clientStartOfDayIso) today.setHours(0, 0, 0, 0);
+    const now = clientNowIso ? new Date(clientNowIso) : new Date();
 
     const attendance = await prisma.attendance.create({
       data: {
@@ -46,11 +47,11 @@ export async function submitCheckIn(employeeId: string, shiftId: string | null, 
   }
 }
 
-export async function submitCheckOut(attendanceId: string, notes: string) {
+export async function submitCheckOut(attendanceId: string, notes: string, clientStartOfDayIso?: string, clientNowIso?: string) {
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const now = new Date();
+    const today = clientStartOfDayIso ? new Date(clientStartOfDayIso) : new Date();
+    if (!clientStartOfDayIso) today.setHours(0, 0, 0, 0);
+    const now = clientNowIso ? new Date(clientNowIso) : new Date();
 
     // Find the attendance record
     const attendance = await prisma.attendance.findUnique({

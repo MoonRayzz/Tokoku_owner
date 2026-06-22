@@ -56,3 +56,35 @@ export async function saveShift(formData: FormData) {
     return { success: false, error: error.message };
   }
 }
+
+export async function paySalary(employeeId: string, month: number, year: number, amount: number, attendanceIds: string[]) {
+  try {
+    const payout = await prisma.salaryPayout.create({
+      data: {
+        employeeId,
+        month,
+        year,
+        amount,
+        attendances: {
+          connect: attendanceIds.map(id => ({ id }))
+        }
+      }
+    });
+
+    await prisma.attendance.updateMany({
+      where: {
+        id: { in: attendanceIds }
+      },
+      data: {
+        isPaid: true,
+        salaryPayoutId: payout.id
+      }
+    });
+
+    revalidatePath('/absensi');
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to pay salary:", error);
+    return { success: false, error: 'Failed to process salary payment' };
+  }
+}

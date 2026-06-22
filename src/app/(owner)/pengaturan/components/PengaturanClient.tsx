@@ -5,6 +5,7 @@ import { createClient } from '@/app/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { ShieldCheck, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { revalidateManifest } from '../actions';
 
 interface PengaturanClientProps {
@@ -15,6 +16,7 @@ export default function PengaturanClient({ initialEmail }: PengaturanClientProps
   const router = useRouter();
   const supabase = createClient();
   const { success, error: toastError, warning } = useToast();
+  const { confirm } = useConfirm();
   
   // Store Profile State
   const [storeName, setStoreName] = useState('');
@@ -164,7 +166,14 @@ export default function PengaturanClient({ initialEmail }: PengaturanClientProps
   };
 
   const handleLogoutAll = async () => {
-    if (confirm('Apakah Anda yakin ingin keluar dari semua perangkat?')) {
+    const isConfirmed = await confirm({
+      title: 'Keluar dari Semua Perangkat',
+      message: 'Apakah Anda yakin ingin keluar dari semua perangkat?',
+      confirmLabel: 'Ya, Keluar Semua',
+      variant: 'warning'
+    });
+    
+    if (isConfirmed) {
       await supabase.auth.signOut({ scope: 'global' });
       router.push('/login');
     }

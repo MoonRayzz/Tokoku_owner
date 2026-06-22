@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { addExpense, deleteExpense } from './actions';
 import { useToast } from '@/components/ui/Toast';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { format } from 'date-fns';
 import { id as localeId } from 'date-fns/locale';
 import { Trash2, PlusCircle, Filter, Search, Download, X } from 'lucide-react';
@@ -45,6 +46,7 @@ const CATEGORIES = [
 export default function ExpenseClient({ expenses, totalPages, totalCount, currentPage, limit, initialSearch, initialCategory, employees, shifts }: ExpenseClientProps) {
   const [loading, setLoading] = useState(false);
   const toast = useToast();
+  const { confirm } = useConfirm();
   
   const router = useRouter();
   const pathname = usePathname();
@@ -130,7 +132,14 @@ export default function ExpenseClient({ expenses, totalPages, totalCount, curren
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Apakah Anda yakin ingin menghapus pengeluaran ini? Tindakan ini tidak dapat dibatalkan.')) return;
+    const isConfirmed = await confirm({
+      title: 'Hapus Pengeluaran',
+      message: 'Apakah Anda yakin ingin menghapus pengeluaran ini? Tindakan ini tidak dapat dibatalkan.',
+      confirmLabel: 'Ya, Hapus',
+      variant: 'danger'
+    });
+    
+    if (!isConfirmed) return;
     
     const res = await deleteExpense(id);
     if (res.success) {

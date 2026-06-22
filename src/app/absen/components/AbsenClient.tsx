@@ -21,6 +21,13 @@ export default function AbsenClient({ employees, shifts, storeProfile }: { emplo
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Helper function to safely get start of day in client's timezone
+  const getClientStartOfDayIso = () => {
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    return startOfDay.toISOString();
+  };
+
   const detectCurrentShift = (): Shift | null => {
     if (shifts.length === 0) return null;
     
@@ -69,7 +76,7 @@ export default function AbsenClient({ employees, shifts, storeProfile }: { emplo
     setNotes('');
     setLoading(true);
 
-    const result = await checkTodayStatus(emp.id);
+    const result = await checkTodayStatus(emp.id, getClientStartOfDayIso());
     setStatus(result.status as AttendanceStatus);
     setAttendanceId(result.attendanceId);
     setLoading(false);
@@ -141,15 +148,17 @@ export default function AbsenClient({ employees, shifts, storeProfile }: { emplo
     const isLocationValid = await verifyLocation();
     if (!isLocationValid) return;
 
-    const result = await submitCheckIn(selectedEmployee.id, currentShift?.id || null, notes);
-    
-    if (result.success && result.attendanceId) {
-      setAttendanceId(result.attendanceId);
-      setStatus('checked-in');
-      setSuccess(`✅ ${selectedEmployee.name} berhasil MASUK pukul ${format(new Date(), 'HH:mm')}`);
-      setNotes('');
-    } else {
-      setError('Gagal mencatat kehadiran. Coba lagi.');
+    if (status === 'idle') {
+      const result = await submitCheckIn(selectedEmployee.id, currentShift?.id || null, notes, getClientStartOfDayIso(), new Date().toISOString());
+      
+      if (result.success && result.attendanceId) {
+        setAttendanceId(result.attendanceId);
+        setStatus('checked-in');
+        setSuccess(`✅ ${selectedEmployee.name} berhasil MASUK pukul ${format(new Date(), 'HH:mm')}`);
+        setNotes('');
+      } else {
+        setError('Gagal mencatat kehadiran. Coba lagi.');
+      }
     }
     setLoading(false);
   };
@@ -162,18 +171,20 @@ export default function AbsenClient({ employees, shifts, storeProfile }: { emplo
     const isLocationValid = await verifyLocation();
     if (!isLocationValid) return;
 
-    const result = await submitCheckOut(attendanceId, notes);
-    
-    if (result.success) {
-      setStatus('checked-out');
-      setSuccess(
-        `✅ ${selectedEmployee.name} PULANG pukul ${format(new Date(), 'HH:mm')}. ` +
-        `Kerja ${result.hoursWorked} jam. Upah: Rp ${(result.totalWage || 0).toLocaleString('id-ID')}` +
-        (result.isSolo ? ' (Tarif Solo 🌟)' : '')
-      );
-      setNotes('');
-    } else {
-      setError('Gagal mencatat kepulangan. Coba lagi. ' + result.error);
+    if (status === 'checked-in' && attendanceId) {
+      const result = await submitCheckOut(attendanceId, notes, getClientStartOfDayIso(), new Date().toISOString());
+      
+      if (result.success) {
+        setStatus('checked-out');
+        setSuccess(
+          `✅ ${selectedEmployee.name} PULANG pukul ${format(new Date(), 'HH:mm')}. ` +
+          `Kerja ${result.hoursWorked} jam. Upah: Rp ${(result.totalWage || 0).toLocaleString('id-ID')}` +
+          (result.isSolo ? ' (Tarif Solo 🌟)' : '')
+        );
+        setNotes('');
+      } else {
+        setError('Gagal mencatat kepulangan. Coba lagi. ' + result.error);
+      }
     }
     setLoading(false);
   };

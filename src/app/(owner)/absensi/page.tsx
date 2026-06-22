@@ -14,19 +14,23 @@ export default async function AbsensiPage({
   const page = isNaN(pageParam) || pageParam < 1 ? 1 : pageParam;
   const limit = PAGE_SIZE.ABSENSI;
 
-  const [attendances, totalCount] = await Promise.all([
+  const [attendances, totalCount, salaryPayouts, unpaidAttendances, storeProfile] = await Promise.all([
     prisma.attendance.findMany({
-      include: {
-        employee: true,
-        shift: true,
-      },
-      orderBy: {
-        date: 'desc',
-      },
+      include: { employee: true, shift: true },
+      orderBy: { date: 'desc' },
       skip: (page - 1) * limit,
       take: limit,
     }),
-    prisma.attendance.count()
+    prisma.attendance.count(),
+    prisma.salaryPayout.findMany({
+      include: { employee: true, attendances: true },
+      orderBy: { paidAt: 'desc' }
+    }),
+    prisma.attendance.findMany({
+      where: { isPaid: false },
+      include: { employee: true, shift: true }
+    }),
+    prisma.storeProfile.findFirst()
   ]);
 
   const totalPages = Math.ceil(totalCount / limit);
@@ -48,10 +52,13 @@ export default async function AbsensiPage({
       attendances={attendances}
       employees={employees}
       shifts={shifts}
+      salaryPayouts={salaryPayouts}
+      unpaidAttendances={unpaidAttendances}
       totalPages={totalPages}
       totalCount={totalCount}
       currentPage={page}
       limit={limit}
+      storeName={storeProfile?.name || 'TokoKu'}
     />
   );
 }

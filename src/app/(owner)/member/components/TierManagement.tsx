@@ -4,11 +4,13 @@ import React, { useState } from 'react';
 import { Pencil, Trash2, Plus } from 'lucide-react';
 import { saveTier, deleteTier } from '../actions';
 import { useToast } from '@/components/ui/Toast';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 
 export function TierManagement({ tiers }: { tiers: any[] }) {
   const [editingTier, setEditingTier] = useState<any | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const toast = useToast();
+  const { confirm } = useConfirm();
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,7 +26,14 @@ export function TierManagement({ tiers }: { tiers: any[] }) {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('Apakah Anda yakin ingin menghapus level ini?')) {
+    const isConfirmed = await confirm({
+      title: 'Hapus Level Member',
+      message: 'Apakah Anda yakin ingin menghapus level ini?',
+      confirmLabel: 'Ya, Hapus',
+      variant: 'danger'
+    });
+    
+    if (isConfirmed) {
       const result = await deleteTier(id);
       if (result.success) {
         toast.success('Level Member berhasil dihapus!');
