@@ -134,6 +134,8 @@ export default async function MemberPage({
   // Paginate
   const paginatedMembers = formattedMembers.slice(offset, offset + limit);
 
+  const storeProfile = await prisma.storeProfile.findFirst() || { name: 'TokoKu', logoUrl: null };
+
   return (
     <MemberClient 
       members={paginatedMembers}
@@ -148,6 +150,7 @@ export default async function MemberPage({
       currentSearch={searchParam}
       currentSort={sortParam}
       currentOrder={orderParam}
+      storeProfile={storeProfile}
     />
   );
 }

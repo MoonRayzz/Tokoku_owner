@@ -1,12 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { format } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 import { Search, Download, MoreVertical, Lightbulb, ChevronLeft, ChevronRight, ArrowUpDown } from 'lucide-react';
 import { TierManagement } from './TierManagement';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useReactToPrint } from 'react-to-print';
+import { PrintableMemberCards } from './PrintableMemberCards';
+import { MemberCardProps } from './MemberCard';
 
 interface MemberTier {
   id: string;
@@ -43,6 +46,7 @@ interface MemberClientProps {
   currentSearch: string;
   currentSort: string;
   currentOrder: string;
+  storeProfile: { name: string; logoUrl: string | null; };
 }
 
 export default function MemberClient({
@@ -57,11 +61,37 @@ export default function MemberClient({
   totalPages,
   currentSearch,
   currentSort,
-  currentOrder
+  currentOrder,
+  storeProfile
 }: MemberClientProps) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState(currentSearch);
   const [activeTab, setActiveTab] = useState<'DAFTAR' | 'PENGATURAN'>('DAFTAR');
+  const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
+  const printRef = useRef<HTMLDivElement>(null);
+
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: 'Kartu Member TokoKu',
+  });
+
+  const toggleSelectAll = () => {
+    if (selectedMembers.size === members.length && members.length > 0) {
+      setSelectedMembers(new Set());
+    } else {
+      setSelectedMembers(new Set(members.map(m => m.id)));
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    const newSet = new Set(selectedMembers);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedMembers(newSet);
+  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -182,8 +212,14 @@ export default function MemberClient({
       <section className="bg-surface rounded-xl border border-border overflow-hidden shadow-sm">
         <div className="p-6 border-b border-border flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <h3 className="text-lg font-bold text-text-primary">Daftar Semua Member</h3>
-          <form onSubmit={handleSearch} className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-            <div className="relative">
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+            {selectedMembers.size > 0 && (
+              <button onClick={() => handlePrint()} className="px-4 py-2 bg-primary-container text-on-primary-container hover:brightness-110 transition-colors text-sm font-bold rounded-lg flex items-center gap-2">
+                <Download size={16} />
+                Cetak {selectedMembers.size} Terpilih
+              </button>
+            )}
+            <form onSubmit={handleSearch} className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={16} />
               <input 
                 className="bg-background border border-border focus:border-primary-container focus:ring-1 focus:ring-primary-container text-sm rounded-lg pl-9 pr-3 py-2 w-full md:w-64 outline-none text-text-primary transition-all" 
@@ -191,15 +227,18 @@ export default function MemberClient({
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
               />
-            </div>
-            <button type="submit" className="hidden">Search</button>
-          </form>
+              <button type="submit" className="hidden">Search</button>
+            </form>
+          </div>
         </div>
         
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead className="bg-surface-container-high text-text-secondary text-[11px] uppercase tracking-wider border-b border-border">
               <tr>
+                <th className="px-6 py-4 w-10">
+                  <input type="checkbox" onChange={toggleSelectAll} checked={members.length > 0 && selectedMembers.size === members.length} className="w-4 h-4 cursor-pointer" />
+                </th>
                 <th className="px-6 py-4 font-semibold cursor-pointer hover:text-primary transition-colors" onClick={() => handleSort('name')}>
                   <div className="flex items-center gap-1">Member <ArrowUpDown size={12}/></div>
                 </th>
@@ -218,16 +257,20 @@ export default function MemberClient({
                 <th className="px-6 py-4 font-semibold cursor-pointer hover:text-primary transition-colors text-center" onClick={() => handleSort('lastSold')}>
                   <div className="flex items-center justify-center gap-1">Terakhir Belanja <ArrowUpDown size={12}/></div>
                 </th>
+                <th className="px-6 py-4"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border text-sm">
               {members.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-text-secondary">Tidak ada data member yang sesuai.</td>
+                  <td colSpan={8} className="px-6 py-12 text-center text-text-secondary">Tidak ada data member yang sesuai.</td>
                 </tr>
               ) : (
                 members.map(member => (
                   <tr key={member.id} className="hover:bg-surface-variant transition-colors group">
+                    <td className="px-6 py-4">
+                      <input type="checkbox" onChange={() => toggleSelect(member.id)} checked={selectedMembers.has(member.id)} className="w-4 h-4 cursor-pointer" />
+                    </td>
                     <td className="px-6 py-4">
                       <Link href={`/laporan?member=${member.id}`} className="block">
                         <div className="font-bold text-text-primary group-hover:text-primary transition-colors">{member.name}</div>
@@ -257,6 +300,11 @@ export default function MemberClient({
                       ) : (
                         <span className="italic opacity-50">Belum pernah</span>
                       )}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button onClick={() => { setSelectedMembers(new Set([member.id])); setTimeout(() => handlePrint(), 100); }} className="text-text-secondary hover:text-primary transition-colors p-1" title="Cetak Kartu">
+                        <Download size={16} />
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -292,6 +340,23 @@ export default function MemberClient({
       </section>
         </>
       )}
+
+      {/* Hidden Printable Component */}
+      <div className="absolute opacity-0 -left-[9999px] -top-[9999px]">
+        <PrintableMemberCards ref={printRef} cards={Array.from(selectedMembers).map(id => {
+          const member = members.find(m => m.id === id);
+          if (!member) return null;
+          return {
+            memberId: member.id,
+            name: member.name,
+            phone: member.phone,
+            tierName: member.tier,
+            tierColorClass: getTierColor(member.tier),
+            storeName: storeProfile?.name || 'TokoKu',
+            logoUrl: storeProfile?.logoUrl,
+          };
+        }).filter(Boolean) as MemberCardProps[]} />
+      </div>
     </div>
   );
 }

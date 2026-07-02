@@ -352,7 +352,7 @@ export default function PengaturanClient({ initialEmail }: PengaturanClientProps
                       <img src={logoUrl} alt="Logo" className="h-8 object-contain mix-blend-multiply grayscale" />
                     </div>
                   )}
-                  <div className="font-bold text-[16px] mb-1">{(storeName || 'TOKOKU POS').toUpperCase()}</div>
+                  <div className="font-bold text-[16px] mb-1">{storeName || 'TOKOKU POS'}</div>
                   <div className="break-words">{storeAddress || 'Alamat Toko'}</div>
                   <div>{storeCity}</div>
                   <div>Telp: {storePhone || '-'}</div>

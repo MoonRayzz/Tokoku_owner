@@ -396,6 +396,7 @@ export default function ProductClient({ products, totalPages, totalCount, curren
                     <tr>
                       <th className="px-6 py-3 font-semibold text-text-secondary">Tanggal</th>
                       <th className="px-6 py-3 font-semibold text-text-secondary">Tipe</th>
+                      <th className="px-6 py-3 font-semibold text-text-secondary">Stok Sebelumnya</th>
                       <th className="px-6 py-3 font-semibold text-text-secondary">Jumlah</th>
                       <th className="px-6 py-3 font-semibold text-text-secondary">Sisa Stok</th>
                       <th className="px-6 py-3 font-semibold text-text-secondary">Keterangan</th>
@@ -410,13 +411,14 @@ export default function ProductClient({ products, totalPages, totalCount, curren
                       
                       if (log.type === 'IN') { typeColor = 'text-status-success font-medium'; typeLabel = 'Masuk (PO)'; amountPrefix = '+'; }
                       else if (log.type === 'OUT') { typeColor = 'text-brand-secondary font-medium'; typeLabel = 'Terjual'; amountPrefix = '-'; }
-                      else if (log.type === 'CORRECTION') { typeColor = 'text-warning font-medium'; typeLabel = log.amount > 0 ? 'Tambah Stok' : 'Koreksi'; amountPrefix = (log.amount > 0 ? '+' : ''); }
+                      else if (log.type === 'CORRECTION') { typeColor = 'text-warning font-medium'; typeLabel = log.amount > 0 ? 'Penambahan Stok' : 'Koreksi Pengurangan'; amountPrefix = (log.amount > 0 ? '+' : ''); }
                       else if (log.type === 'VOID_RETURN') { typeColor = 'text-status-success font-medium'; typeLabel = 'Void / Retur'; amountPrefix = '+'; }
 
                       return (
                         <tr key={log.id} className="hover:bg-surface-container/30 transition-colors">
                           <td className="px-6 py-3 text-text-primary">{new Date(log.date).toLocaleString('id-ID')}</td>
                           <td className={`px-6 py-3 ${typeColor}`}>{typeLabel}</td>
+                          <td className="px-6 py-3 text-text-secondary font-medium">{log.stockBefore}</td>
                           <td className={`px-6 py-3 ${typeColor}`}>{amountPrefix}{log.amount}</td>
                           <td className="px-6 py-3 text-text-primary font-medium">{log.stockAfter}</td>
                           <td className="px-6 py-3 text-text-secondary">{log.notes || '-'}</td>

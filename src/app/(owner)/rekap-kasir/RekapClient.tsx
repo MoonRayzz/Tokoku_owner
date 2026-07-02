@@ -134,6 +134,16 @@ export default function RekapClient({ initialReports }: { initialReports: any[] 
                   <span>🟡 Uang lebih Rp {report.variance.toLocaleString('id-ID')} dari catatan. Mungkin ada kembalian yang salah hitung. Catatan: "{report.notes || 'Tidak ada alasan'}"</span>
                 )}
               </div>
+
+              {report.actionAfterClose && (
+                <div className={`mt-3 p-3 rounded-lg text-sm font-medium border flex items-center gap-2 ${
+                  report.actionAfterClose === 'DEPOSITED' 
+                    ? 'bg-primary/10 border-primary/20 text-primary' 
+                    : 'bg-surface-bright border-border text-text-secondary'
+                }`}>
+                  {report.actionAfterClose === 'DEPOSITED' ? '📥 Fisik disetor ke Owner' : '🔒 Fisik ditinggal di Laci'}
+                </div>
+              )}
             </div>
           </div>
         ))}
