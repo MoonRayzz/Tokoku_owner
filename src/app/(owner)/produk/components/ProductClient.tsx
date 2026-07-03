@@ -145,7 +145,7 @@ export default function ProductClient({ products, totalPages, totalCount, curren
           <Search className="absolute left-3 text-text-secondary" size={18} />
           <input 
             className="w-full bg-background border border-border focus:border-primary-container focus:ring-1 focus:ring-primary-container text-sm rounded-lg pl-10 h-10 transition-all text-text-primary outline-none" 
-            placeholder="Cari nama produk atau SKU..." 
+            placeholder="Cari nama, SKU, atau Barcode..." 
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
           />
@@ -167,7 +167,7 @@ export default function ProductClient({ products, totalPages, totalCount, curren
           <table className="w-full text-left border-collapse min-w-[800px]">
             <thead>
               <tr className="bg-surface-container-high border-b border-border">
-                <th className="px-6 py-4 text-[11px] font-semibold text-text-secondary uppercase tracking-wider">Produk</th>
+                <th className="px-6 py-4 text-[11px] font-semibold text-text-secondary uppercase tracking-wider">Produk / Barcode</th>
                 <th className="px-6 py-4 text-[11px] font-semibold text-text-secondary uppercase tracking-wider text-right">Harga Modal</th>
                 <th className="px-6 py-4 text-[11px] font-semibold text-text-secondary uppercase tracking-wider text-right">Harga Ecer</th>
                 <th className="px-6 py-4 text-[11px] font-semibold text-text-secondary uppercase tracking-wider text-right">Harga Grosir</th>
@@ -187,9 +187,14 @@ export default function ProductClient({ products, totalPages, totalCount, curren
                   return (
                     <tr key={p.id} className={`hover:bg-surface-container transition-colors group ${isLowStock ? 'border-l-4 border-l-warning bg-warning/5' : ''}`}>
                       <td className="px-6 py-4">
-                        <div className="flex flex-col">
+                      <div className="flex flex-col">
                           <span className="font-semibold text-text-primary">{p.name}</span>
                           <span className="text-xs text-text-secondary">{p.sku}</span>
+                          {(p as any).barcode && (
+                            <span className="text-[10px] font-mono text-text-secondary/60 mt-0.5">
+                              🔖 {(p as any).barcode}
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4 text-right">
@@ -282,6 +287,16 @@ export default function ProductClient({ products, totalPages, totalCount, curren
                   defaultValue={editingProduct.sku} 
                   required 
                   className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-text-primary outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-text-secondary uppercase">Barcode Fisik (Opsional)</label>
+                <input 
+                  name="barcode"
+                  defaultValue={(editingProduct as any).barcode || ''}
+                  placeholder="Kosongkan jika tidak ada barcode"
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-text-primary font-mono outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container"
                 />
               </div>
 

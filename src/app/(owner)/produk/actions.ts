@@ -18,6 +18,8 @@ export async function updateProduct(formData: FormData) {
 
     const priceWholesale = priceWholesaleStr ? parseFloat(priceWholesaleStr) : null;
     const wholesaleMinQty = wholesaleMinQtyStr ? parseInt(wholesaleMinQtyStr) : null;
+    const barcodeRaw = formData.get('barcode') as string;
+    const barcode = barcodeRaw && barcodeRaw.trim() ? barcodeRaw.trim() : null;
 
     if (!id) {
       return { success: false, error: 'ID produk tidak ditemukan.' };
@@ -28,6 +30,7 @@ export async function updateProduct(formData: FormData) {
       data: {
         name,
         sku,
+        barcode,
         priceBuy,
         priceRetail,
         priceWholesale,

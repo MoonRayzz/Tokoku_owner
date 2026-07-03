@@ -19,7 +19,8 @@ export default async function ProductPage({
   const whereClause: any = searchParam ? {
     OR: [
       { name: { contains: searchParam, mode: 'insensitive' } },
-      { sku: { contains: searchParam, mode: 'insensitive' } }
+      { sku: { contains: searchParam, mode: 'insensitive' } },
+      { barcode: { contains: searchParam, mode: 'insensitive' } }
     ]
   } : {};
 

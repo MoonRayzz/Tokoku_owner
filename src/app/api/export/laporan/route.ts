@@ -1,537 +1,546 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { Prisma } from '@prisma/client';
-import * as XLSX from 'xlsx';
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const type = searchParams.get('type') || 'excel'; // excel atau pdf
   const startParam = searchParams.get('start');
-  const endParam = searchParams.get('end');
+  const endParam   = searchParams.get('end');
   const shiftParam = searchParams.get('shift');
 
   const isAllTime = startParam === 'all';
-  const todayStr = new Date().toISOString().split('T')[0];
-  const start = isAllTime ? new Date('2020-01-01T00:00:00.000Z') : (startParam ? new Date(`${startParam}T00:00:00.000Z`) : new Date(`${todayStr}T00:00:00.000Z`));
-  const end = isAllTime ? new Date() : (endParam ? new Date(`${endParam}T23:59:59.999Z`) : new Date(`${todayStr}T23:59:59.999Z`));
+  const todayStr  = new Date().toISOString().split('T')[0];
+  const start = isAllTime
+    ? new Date('2020-01-01T00:00:00.000Z')
+    : startParam ? new Date(`${startParam}T00:00:00.000Z`) : new Date(`${todayStr}T00:00:00.000Z`);
+  const end = isAllTime
+    ? new Date()
+    : endParam ? new Date(`${endParam}T23:59:59.999Z`) : new Date(`${todayStr}T23:59:59.999Z`);
 
+  // ─── DATA FETCHING ─────────────────────────────────────────────────────────
   const transactions = await prisma.transaction.findMany({
     where: {
       createdAt: { gte: start, lte: end },
       isVoid: false,
-      ...(shiftParam ? { shiftId: shiftParam } : {})
+      ...(shiftParam ? { shiftId: shiftParam } : {}),
     },
-    include: {
-      member: true,
-      details: {
-        include: { product: true }
-      }
-    },
-    orderBy: { createdAt: 'desc' }
+    include: { member: true, details: { include: { product: true } } },
+    orderBy: { createdAt: 'desc' },
   });
 
   const expenses = await prisma.expense.findMany({
     where: {
       date: { gte: start, lte: end },
       isVoid: false,
-      ...(shiftParam ? { shiftId: shiftParam } : {})
+      ...(shiftParam ? { shiftId: shiftParam } : {}),
     },
-    include: {
-      employee: true
-    },
-    orderBy: { date: 'desc' }
+    include: { employee: true },
+    orderBy: { date: 'desc' },
   });
 
-  if (type === 'excel') {
-    const shifts = await prisma.shift.findMany({
-      where: { isActive: true },
-      select: { id: true, name: true }
-    });
-    const shiftMap = new Map(shifts.map(s => [s.id, s.name]));
+  const shifts = await prisma.shift.findMany({ where: { isActive: true }, select: { id: true, name: true } });
+  const shiftMap = new Map(shifts.map(s => [s.id, s.name]));
 
-    const dailyTrend: Array<{
-      date: string | Date;
-      count: bigint;
-      omzet: number;
-      hpp: number;
-    }> = await prisma.$queryRaw`
-      SELECT 
-        DATE(t."createdAt") as date,
-        COUNT(t.id) as count,
-        SUM(t."totalAmount" - t."discountAmount") as omzet,
-        SUM(COALESCE(td."priceBuyAtTime", 0) * td."quantity") as hpp
-      FROM "Transaction" t
-      LEFT JOIN "TransactionDetail" td ON td."transactionId" = t.id
-      WHERE t."createdAt" >= ${start}
-        AND t."createdAt" <= ${end}
-        AND t."isVoid" = false
-        ${shiftParam ? Prisma.sql`AND t."shiftId" = ${shiftParam}` : Prisma.sql``}
-      GROUP BY DATE(t."createdAt")
-      ORDER BY DATE(t."createdAt") ASC
-    `;
+  const dailyTrend: Array<{
+    date: string | Date;
+    count: bigint;
+    omzet: number;
+    hpp: number;
+    diskon: number;
+  }> = await prisma.$queryRaw`
+    SELECT
+      DATE(t."createdAt") as date,
+      COUNT(t.id) as count,
+      SUM(t."totalAmount" - t."discountAmount") as omzet,
+      SUM(COALESCE(td."priceBuyAtTime", 0) * td."quantity") as hpp,
+      SUM(t."discountAmount") as diskon
+    FROM "Transaction" t
+    LEFT JOIN "TransactionDetail" td ON td."transactionId" = t.id
+    WHERE t."createdAt" >= ${start}
+      AND t."createdAt" <= ${end}
+      AND t."isVoid" = false
+      ${shiftParam ? Prisma.sql`AND t."shiftId" = ${shiftParam}` : Prisma.sql``}
+    GROUP BY DATE(t."createdAt")
+    ORDER BY DATE(t."createdAt") ASC
+  `;
 
-    const topProducts: Array<{
-      name: string;
-      sku: string;
-      totalQty: bigint;
-      totalOmzet: number;
-      totalHpp: number;
-    }> = await prisma.$queryRaw`
-      SELECT 
-        p."name",
-        p."sku",
-        SUM(td."quantity") as "totalQty",
-        SUM(td."subtotal") as "totalOmzet",
-        SUM(COALESCE(td."priceBuyAtTime", 0) * td."quantity") as "totalHpp"
-      FROM "TransactionDetail" td
-      JOIN "Transaction" t ON t."id" = td."transactionId"
-      JOIN "Product" p ON p."id" = td."productId"
-      WHERE t."createdAt" >= ${start}
-        AND t."createdAt" <= ${end}
-        AND t."isVoid" = false
-      GROUP BY p."id", p."name", p."sku"
-      ORDER BY SUM(td."quantity") DESC
-      LIMIT 5
-    `;
+  const allProducts: Array<{
+    name: string;
+    sku: string;
+    totalQty: bigint;
+    totalOmzet: number;
+    totalHpp: number;
+    totalDiskon: number;
+  }> = await prisma.$queryRaw`
+    SELECT
+      p."name",
+      p."sku",
+      SUM(td."quantity")                                        as "totalQty",
+      SUM(td."subtotal")                                        as "totalOmzet",
+      SUM(COALESCE(td."priceBuyAtTime", 0) * td."quantity")    as "totalHpp",
+      SUM(COALESCE(td."discountAmount", 0))                    as "totalDiskon"
+    FROM "TransactionDetail" td
+    JOIN "Transaction" t ON t."id" = td."transactionId"
+    JOIN "Product" p      ON p."id" = td."productId"
+    WHERE t."createdAt" >= ${start}
+      AND t."createdAt" <= ${end}
+      AND t."isVoid" = false
+    GROUP BY p."id", p."name", p."sku"
+    ORDER BY SUM(td."quantity") DESC
+  `;
 
-    const debtSummary = await prisma.debt.aggregate({
-      where: { createdAt: { gte: start, lte: end } },
-      _sum: { totalAmount: true }
-    });
-    const cicilanSummary = await prisma.debtPayment.aggregate({
-      where: { paidAt: { gte: start, lte: end } },
-      _sum: { amount: true }
-    });
-    const activeDebt = await prisma.debt.aggregate({
-      where: { status: { not: 'PAID' } },
-      _sum: { remaining: true }
-    });
+  const debtSummary   = await prisma.debt.aggregate({ where: { createdAt: { gte: start, lte: end } }, _sum: { totalAmount: true } });
+  const cicilanSummary = await prisma.debtPayment.aggregate({ where: { paidAt: { gte: start, lte: end } }, _sum: { amount: true } });
+  const activeDebt    = await prisma.debt.aggregate({ where: { status: { not: 'PAID' } }, _sum: { remaining: true } });
 
-    const ExcelJS = await import('exceljs');
-    const workbook = new ExcelJS.Workbook();
-    workbook.creator = 'TokoKu Owner Dashboard';
-    workbook.created = new Date();
+  // ─── KALKULASI UTAMA ───────────────────────────────────────────────────────
+  let totalOmzetTunai = 0, totalPiutangBaru = 0, totalHppAll = 0, totalDiskonAll = 0;
+  transactions.forEach(tx => {
+    let txHpp = 0;
+    tx.details.forEach(d => { txHpp += (d.priceBuyAtTime || 0) * d.quantity; });
+    totalHppAll += txHpp;
+    totalDiskonAll += tx.discountAmount;
+    const netto = tx.totalAmount - tx.discountAmount;
+    if (tx.paymentMethod === 'utang') totalPiutangBaru += netto;
+    else totalOmzetTunai += netto;
+  });
 
-    // SHEET 1
-    const ws1 = workbook.addWorksheet('Data Transaksi');
-    ws1.columns = [
-      { header: 'No. Nota',      key: 'nota',    width: 28 },
-      { header: 'Waktu',         key: 'waktu',   width: 22 },
-      { header: 'Kasir',         key: 'kasir',   width: 16 },
-      { header: 'Shift',         key: 'shift',   width: 14 },
-      { header: 'Member',        key: 'member',  width: 18 },
-      { header: 'Metode Bayar',  key: 'metode',  width: 14 },
-      { header: 'Omzet (Rp)',    key: 'omzet',   width: 16 },
-      { header: 'HPP (Rp)',      key: 'hpp',     width: 16 },
-      { header: 'Profit (Rp)',   key: 'profit',  width: 16 },
-      { header: 'Margin (%)',    key: 'margin',  width: 12 },
-      { header: 'Items',         key: 'items',   width: 50 },
-    ];
+  const totalOmzetBruto         = transactions.reduce((s, t) => s + t.totalAmount, 0);
+  const totalOmzetSesungguhnya  = totalOmzetTunai + totalPiutangBaru;
+  const totalPengeluaranAll     = expenses.reduce((s, e) => s + e.amount, 0);
+  const profitKotor             = totalOmzetSesungguhnya - totalHppAll;
+  const labaBersih              = profitKotor - totalPengeluaranAll;
+  const cicilanMasuk            = cicilanSummary._sum?.amount || 0;
+  const kasRealMasuk            = totalOmzetTunai + cicilanMasuk;
+  const avgMargin               = totalOmzetSesungguhnya > 0 ? (profitKotor / totalOmzetSesungguhnya) * 100 : 0;
+  const omzetPerTx              = transactions.length > 0 ? totalOmzetSesungguhnya / transactions.length : 0;
 
-    ws1.getRow(1).eachCell(cell => {
-      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF10B981' } };
+  // ─── EXCEL BUILD ───────────────────────────────────────────────────────────
+  const ExcelJS = await import('exceljs');
+  const wb      = new ExcelJS.Workbook();
+  wb.creator    = 'TokoKu Owner Dashboard';
+  wb.created    = new Date();
+
+  const EMERALD  = '10B981';
+  const RED      = 'EF4444';
+  const NAVY     = '1E3A5F';
+  const GOLD     = 'D97706';
+  const GREEN_DK = '065F46';
+  const GRAY_BG  = 'F9FAFB';
+  const GRAY_HD  = 'E5E7EB';
+
+  const styleHeader = (row: any, bgArgb: string) => {
+    row.eachCell({ includeEmpty: true }, (cell: any) => {
+      cell.font      = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+      cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${bgArgb}` } };
       cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: false };
-      cell.border = { bottom: { style: 'thin', color: { argb: 'FF059669' } } };
+      cell.border    = { bottom: { style: 'medium', color: { argb: `FF${bgArgb}` } } };
     });
-    ws1.getRow(1).height = 20;
+    row.height = 22;
+  };
 
-    transactions.forEach((tx, idx) => {
-      let totalHpp = 0;
-      const itemsList: string[] = [];
-      tx.details.forEach(d => {
-        totalHpp += (d.priceBuyAtTime || 0) * d.quantity;
-        itemsList.push(`${d.product.name} (×${d.quantity})`);
-      });
-      const netto = tx.totalAmount - tx.discountAmount;
-      const profit = netto - totalHpp;
-      const margin = netto > 0 ? (profit / netto) * 100 : 0;
-      const shiftName = tx.shiftId ? (shiftMap.get(tx.shiftId) || '-') : '-';
-
-      const row = ws1.addRow({
-        nota:   tx.receiptNumber,
-        waktu:  new Date(tx.createdAt).toLocaleString('id-ID'),
-        kasir:  tx.cashierName,
-        shift:  shiftName,
-        member: tx.member?.name || 'Umum',
-        metode: tx.paymentMethod.toUpperCase(),
-        omzet:  netto,
-        hpp:    totalHpp,
-        profit: profit,
-        margin: parseFloat(margin.toFixed(2)),
-        items:  itemsList.join(', '),
-      });
-
-      if (idx % 2 === 1) {
-        row.eachCell(cell => {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0FDF4' } };
-        });
-      }
-
-      ['omzet', 'hpp', 'profit'].forEach(key => {
-        const cell = row.getCell(key);
-        cell.numFmt = '#,##0';
-        cell.alignment = { horizontal: 'right' };
-      });
-
-      row.getCell('margin').numFmt = '0.00"%"';
-      row.getCell('margin').alignment = { horizontal: 'center' };
-
-      if (tx.paymentMethod === 'utang') {
-        row.getCell('metode').font = { color: { argb: 'FFF59E0B' }, bold: true };
-      }
-    });
-
-    ws1.views = [{ state: 'frozen', ySplit: 1 }];
-    ws1.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 11 } };
-
-    // SHEET 2
-    const ws2 = workbook.addWorksheet('Pengeluaran');
-    ws2.columns = [
-      { header: 'Waktu',        key: 'waktu',     width: 22 },
-      { header: 'Kategori',     key: 'kategori',  width: 20 },
-      { header: 'Nominal (Rp)', key: 'nominal',   width: 16 },
-      { header: 'Kasir',        key: 'kasir',     width: 16 },
-      { header: 'Keterangan',   key: 'keterangan',width: 40 },
-    ];
-
-    ws2.getRow(1).eachCell(cell => {
-      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEF4444' } };
+  const styleSubHeader = (row: any) => {
+    row.eachCell({ includeEmpty: true }, (cell: any) => {
+      cell.font      = { bold: true, size: 10 };
+      cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${GRAY_HD}` } };
       cell.alignment = { vertical: 'middle', horizontal: 'center' };
+      cell.border    = { bottom: { style: 'thin' } };
     });
-    ws2.getRow(1).height = 20;
+    row.height = 18;
+  };
 
-    expenses.forEach((e, idx) => {
-      const row = ws2.addRow({
-        waktu:      new Date(e.date).toLocaleString('id-ID'),
-        kategori:   e.category,
-        nominal:    e.amount,
-        kasir:      e.employee.name,
-        keterangan: e.notes || '-',
-      });
-
-      if (idx % 2 === 1) {
-        row.eachCell(cell => {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF1F2' } };
-        });
-      }
-
-      row.getCell('nominal').numFmt = '#,##0';
-      row.getCell('nominal').alignment = { horizontal: 'right' };
-    });
-
-    ws2.views = [{ state: 'frozen', ySplit: 1 }];
-    ws2.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 5 } };
-
-    // SHEET 3
-    const ws3 = workbook.addWorksheet('Analisis Bisnis');
-    ws3.getColumn(1).width = 32;
-    ws3.getColumn(2).width = 24;
-    ws3.getColumn(3).width = 20;
-    ws3.getColumn(4).width = 20;
-    ws3.getColumn(5).width = 16;
-    ws3.getColumn(6).width = 14;
-
-    const addSectionHeader = (ws: any, title: string, rowNum: number, colSpan: number = 6) => {
-      const row = ws.getRow(rowNum);
-      row.getCell(1).value = title;
-      row.getCell(1).font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } };
-      row.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF065F46' } };
-      row.height = 22;
-      ws.mergeCells(rowNum, 1, rowNum, colSpan);
-    };
-
-    const addLabelValue = (ws: any, label: string, value: any, rowNum: number, isFormula = false, numFmt = '#,##0') => {
-      const row = ws.getRow(rowNum);
-      row.getCell(1).value = label;
-      row.getCell(1).font = { color: { argb: 'FF374151' } };
-      row.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } };
-      const valueCell = row.getCell(2);
-      valueCell.value = isFormula ? { formula: value } : value;
-      valueCell.numFmt = numFmt;
-      valueCell.font = { bold: true };
-      valueCell.alignment = { horizontal: 'right' };
-      row.height = 18;
-    };
-
-    let currentRow = 1;
-
-    addSectionHeader(ws3, '📊 RINGKASAN KEUANGAN PERIODE', currentRow);
-    currentRow++;
-
-    const periodeLabel = isAllTime ? 'Semua Waktu' : `${startParam || 'today'} s/d ${endParam || startParam || 'today'}`;
-    addLabelValue(ws3, 'Periode', periodeLabel, currentRow, false, '@');
-    currentRow++;
-    addLabelValue(ws3, 'Tanggal Export', new Date().toLocaleString('id-ID'), currentRow, false, '@');
-    currentRow++;
-    currentRow++;
-
-    let totalOmzetTunai = 0;
-    let totalPiutangBaru = 0;
-    let totalHppAll = 0;
-    
-    transactions.forEach(tx => {
-      let txHpp = 0;
-      tx.details.forEach(d => { txHpp += (d.priceBuyAtTime || 0) * d.quantity; });
-      totalHppAll += txHpp;
-      
-      const netto = tx.totalAmount - tx.discountAmount;
-      if (tx.paymentMethod === 'utang') {
-        totalPiutangBaru += netto;
-      } else {
-        totalOmzetTunai += netto;
+  const altRow = (row: any, light: string) => {
+    row.eachCell({ includeEmpty: false }, (cell: any) => {
+      if (!(cell.fill?.fgColor?.argb) || cell.fill.fgColor.argb === 'FFFFFFFF') {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${light}` } };
       }
     });
-    
-    const totalOmzetSesungguhnya = totalOmzetTunai + totalPiutangBaru;
-    const totalPengeluaranAll = expenses.reduce((sum, e) => sum + e.amount, 0);
-    const profitKotor = totalOmzetSesungguhnya - totalHppAll;
-    const labaBersih = profitKotor - totalPengeluaranAll;
-    const cicilanMasuk = cicilanSummary._sum?.amount || 0;
-    const kasRealMasuk = totalOmzetTunai + cicilanMasuk;
-    const avgMargin = totalOmzetSesungguhnya > 0 ? (profitKotor / totalOmzetSesungguhnya) * 100 : 0;
+  };
 
-    addLabelValue(ws3, 'Total Transaksi', transactions.length, currentRow, false, '0');
-    currentRow++;
-    addLabelValue(ws3, 'Omzet Tunai (Cash/QRIS/Debit)', totalOmzetTunai, currentRow);
-    currentRow++;
-    addLabelValue(ws3, 'Piutang Baru (Utang)', totalPiutangBaru, currentRow);
-    currentRow++;
-    addLabelValue(ws3, 'Cicilan Utang Masuk', cicilanMasuk, currentRow);
-    currentRow++;
-    addLabelValue(ws3, 'Omzet Sesungguhnya (Tunai + Piutang)', totalOmzetSesungguhnya, currentRow);
-    ws3.getRow(currentRow).getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
-    ws3.getRow(currentRow).getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
-    currentRow++;
-    addLabelValue(ws3, 'Total HPP (Modal Penjualan)', totalHppAll, currentRow);
-    currentRow++;
-    addLabelValue(ws3, 'Profit Kotor (Omzet - HPP)', profitKotor, currentRow);
-    currentRow++;
-    addLabelValue(ws3, 'Total Pengeluaran Operasional', totalPengeluaranAll, currentRow);
-    currentRow++;
-    addLabelValue(ws3, 'LABA BERSIH (Profit - Pengeluaran)', labaBersih, currentRow);
-    const labaBersihCell = ws3.getRow(currentRow).getCell(2);
-    labaBersihCell.font = { bold: true, size: 13, color: { argb: labaBersih >= 0 ? 'FF065F46' : 'FFDC2626' } };
-    ws3.getRow(currentRow).getCell(1).font = { bold: true, size: 11 };
-    currentRow++;
-    addLabelValue(ws3, 'Kas Real Masuk (Tunai + Cicilan)', kasRealMasuk, currentRow);
-    currentRow++;
-    addLabelValue(ws3, 'Rata-rata Margin Keseluruhan', parseFloat(avgMargin.toFixed(2)), currentRow, false, '0.00"%"');
-    currentRow++;
-    addLabelValue(ws3, 'Piutang Belum Tertagih (Akumulasi)', activeDebt._sum?.remaining || 0, currentRow);
-    currentRow += 2;
+  const rp = (v: number) => v.toLocaleString('id-ID');
 
-    addSectionHeader(ws3, '💳 PERFORMA PER METODE PEMBAYARAN', currentRow);
-    currentRow++;
+  // ══════════════════════════════════════════════════════════════════════════
+  // SHEET 1 — RINGKASAN KEUANGAN EKSEKUTIF
+  // ══════════════════════════════════════════════════════════════════════════
+  const wsRing = wb.addWorksheet('Ringkasan Keuangan');
+  wsRing.getColumn(1).width = 38;
+  wsRing.getColumn(2).width = 22;
+  wsRing.getColumn(3).width = 22;
+  wsRing.getColumn(4).width = 22;
+  wsRing.getColumn(5).width = 18;
+  wsRing.getColumn(6).width = 16;
 
-    const headerRowB = ws3.getRow(currentRow);
-    ['Metode', 'Jumlah Transaksi', 'Total Omzet (Rp)', 'Persentase Omzet'].forEach((h, i) => {
-      const cell = headerRowB.getCell(i + 1);
-      cell.value = h;
-      cell.font = { bold: true };
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE5E7EB' } };
-      cell.alignment = { horizontal: i === 0 ? 'left' : 'right' };
-      cell.border = { bottom: { style: 'thin' } };
-    });
-    currentRow++;
+  let r = 1;
 
-    const methodGroups = new Map<string, { count: number; total: number }>();
-    transactions.forEach(tx => {
-      const method = tx.paymentMethod.toLowerCase();
-      const existing = methodGroups.get(method) || { count: 0, total: 0 };
-      methodGroups.set(method, {
-        count: existing.count + 1,
-        total: existing.total + (tx.totalAmount - tx.discountAmount)
-      });
-    });
+  const addTitle = (ws: any, title: string, sub: string) => {
+    const t1 = ws.getRow(r++);
+    ws.mergeCells(r - 1, 1, r - 1, 6);
+    t1.getCell(1).value = title;
+    t1.getCell(1).font  = { bold: true, size: 15, color: { argb: `FF${NAVY}` } };
+    t1.getCell(1).alignment = { horizontal: 'center' };
+    t1.height = 28;
 
-    ['cash', 'qris', 'debit', 'utang'].forEach(method => {
-      const data = methodGroups.get(method) || { count: 0, total: 0 };
-      const pct = totalOmzetSesungguhnya > 0 ? (data.total / totalOmzetSesungguhnya) * 100 : 0;
-      const row = ws3.getRow(currentRow);
-      row.getCell(1).value = method.toUpperCase();
-      row.getCell(2).value = data.count;
-      row.getCell(2).numFmt = '0';
-      row.getCell(2).alignment = { horizontal: 'right' };
-      row.getCell(3).value = data.total;
-      row.getCell(3).numFmt = '#,##0';
-      row.getCell(3).alignment = { horizontal: 'right' };
-      row.getCell(4).value = parseFloat(pct.toFixed(2));
-      row.getCell(4).numFmt = '0.00"%"';
-      row.getCell(4).alignment = { horizontal: 'right' };
-      if (method === 'utang') {
-        row.getCell(1).font = { color: { argb: 'FFF59E0B' }, bold: true };
-      }
-      currentRow++;
-    });
-    currentRow++;
+    const t2 = ws.getRow(r++);
+    ws.mergeCells(r - 1, 1, r - 1, 6);
+    t2.getCell(1).value = sub;
+    t2.getCell(1).font  = { italic: true, size: 10, color: { argb: 'FF6B7280' } };
+    t2.getCell(1).alignment = { horizontal: 'center' };
+    r++;
+  };
 
-    if (dailyTrend.length > 1) {
-      addSectionHeader(ws3, '📈 TREN HARIAN', currentRow);
-      currentRow++;
+  const addSecHeader = (ws: any, title: string, colSpan = 6) => {
+    const row = ws.getRow(r);
+    ws.mergeCells(r, 1, r, colSpan);
+    row.getCell(1).value = `  ${title}`;
+    row.getCell(1).font  = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
+    row.getCell(1).fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${NAVY}` } };
+    row.height = 22;
+    r++;
+  };
 
-      const headerRowC = ws3.getRow(currentRow);
-      ['Tanggal', 'Jml Transaksi', 'Omzet (Rp)', 'HPP (Rp)', 'Profit (Rp)', 'Margin (%)'].forEach((h, i) => {
-        const cell = headerRowC.getCell(i + 1);
-        cell.value = h;
-        cell.font = { bold: true };
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE5E7EB' } };
-        cell.alignment = { horizontal: i === 0 ? 'left' : 'right' };
-        cell.border = { bottom: { style: 'thin' } };
-      });
-      currentRow++;
+  const addKV = (ws: any, label: string, value: any, numFmt = '#,##0', boldValue = false, highlight = false) => {
+    const row = ws.getRow(r);
+    row.getCell(1).value = `  ${label}`;
+    row.getCell(1).font  = { size: 10, color: { argb: 'FF374151' } };
+    row.getCell(1).fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: highlight ? 'FFD1FAE5' : `FF${GRAY_BG}` } };
+    const vc = row.getCell(2);
+    vc.value = value;
+    vc.numFmt = numFmt;
+    vc.font   = boldValue ? { bold: true, size: 11 } : { size: 10 };
+    vc.alignment = { horizontal: 'right' };
+    vc.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: highlight ? 'FFD1FAE5' : `FF${GRAY_BG}` } };
+    row.height = 18;
+    r++;
+  };
 
-      dailyTrend.forEach((day, idx) => {
-        const omzet = Number(day.omzet || 0);
-        const hpp = Number(day.hpp || 0);
-        const profit = omzet - hpp;
-        const margin = omzet > 0 ? (profit / omzet) * 100 : 0;
-        
-        const row = ws3.getRow(currentRow);
-        const formattedDate = typeof day.date === 'object' && day.date !== null ? (day.date as Date).toISOString().split('T')[0] : String(day.date);
-        row.getCell(1).value = formattedDate;
-        row.getCell(2).value = Number(day.count);
-        row.getCell(2).alignment = { horizontal: 'right' };
-        row.getCell(3).value = omzet;
-        row.getCell(3).numFmt = '#,##0';
-        row.getCell(3).alignment = { horizontal: 'right' };
-        row.getCell(4).value = hpp;
-        row.getCell(4).numFmt = '#,##0';
-        row.getCell(4).alignment = { horizontal: 'right' };
-        row.getCell(5).value = profit;
-        row.getCell(5).numFmt = '#,##0';
-        row.getCell(5).alignment = { horizontal: 'right' };
-        row.getCell(5).font = { color: { argb: profit >= 0 ? 'FF065F46' : 'FFDC2626' } };
-        row.getCell(6).value = parseFloat(margin.toFixed(2));
-        row.getCell(6).numFmt = '0.00"%"';
-        row.getCell(6).alignment = { horizontal: 'right' };
-        
-        if (idx % 2 === 1) {
-          row.eachCell({ includeEmpty: false }, cell => {
-            if (!cell.fill || (cell.fill as any).fgColor?.argb === 'FFFFFFFF') {
-              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } };
-            }
-          });
-        }
-        currentRow++;
-      });
-      currentRow++;
-    }
+  const periodeLabel = isAllTime
+    ? 'Semua Waktu'
+    : `${startParam || todayStr} s/d ${endParam || startParam || todayStr}`;
 
-    addSectionHeader(ws3, '🏆 TOP 5 PRODUK TERJUAL', currentRow);
-    currentRow++;
+  addTitle(wsRing, '📊 LAPORAN KEUANGAN KOMPREHENSIF — TokoKu', `Periode: ${periodeLabel}  |  Diekspor: ${new Date().toLocaleString('id-ID')}`);
 
-    const headerRowD = ws3.getRow(currentRow);
-    ['Nama Produk', 'SKU', 'Total Terjual', 'Omzet (Rp)', 'HPP (Rp)', 'Margin (%)'].forEach((h, i) => {
-      const cell = headerRowD.getCell(i + 1);
-      cell.value = h;
-      cell.font = { bold: true };
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE5E7EB' } };
-      cell.alignment = { horizontal: i <= 1 ? 'left' : 'right' };
-      cell.border = { bottom: { style: 'thin' } };
-    });
-    currentRow++;
+  // === BLOK A: KPI Utama
+  addSecHeader(wsRing, '💹 A. KEY PERFORMANCE INDICATOR (KPI)');
+  addKV(wsRing, 'Total Transaksi', transactions.length, '0 "nota"');
+  addKV(wsRing, 'Omzet Bruto (sebelum diskon)', totalOmzetBruto);
+  addKV(wsRing, 'Total Diskon Diberikan', totalDiskonAll);
+  addKV(wsRing, 'Omzet Tunai (Cash/QRIS/Debit)', totalOmzetTunai, '#,##0', false, true);
+  addKV(wsRing, 'Piutang Baru (Bayar Utang)', totalPiutangBaru);
+  addKV(wsRing, 'Cicilan Utang Diterima', cicilanMasuk);
+  addKV(wsRing, 'Total Omzet (Tunai + Piutang Baru)', totalOmzetSesungguhnya, '#,##0', true, true);
+  addKV(wsRing, 'Rata-rata Nilai per Transaksi', omzetPerTx);
+  r++;
 
-    topProducts.forEach((p, idx) => {
-      const omzet = Number(p.totalOmzet || 0);
-      const hpp = Number(p.totalHpp || 0);
-      const margin = omzet > 0 ? ((omzet - hpp) / omzet) * 100 : 0;
-      
-      const row = ws3.getRow(currentRow);
-      row.getCell(1).value = p.name;
-      row.getCell(2).value = p.sku;
-      row.getCell(3).value = Number(p.totalQty);
-      row.getCell(3).alignment = { horizontal: 'right' };
-      row.getCell(4).value = omzet;
-      row.getCell(4).numFmt = '#,##0';
-      row.getCell(4).alignment = { horizontal: 'right' };
-      row.getCell(5).value = hpp;
-      row.getCell(5).numFmt = '#,##0';
-      row.getCell(5).alignment = { horizontal: 'right' };
-      row.getCell(6).value = parseFloat(margin.toFixed(2));
-      row.getCell(6).numFmt = '0.00"%"';
-      row.getCell(6).alignment = { horizontal: 'right' };
-      
-      if (idx === 0) {
-        row.getCell(1).font = { bold: true, color: { argb: 'FFD97706' } };
-      }
-      currentRow++;
-    });
-    currentRow++;
-
-    const totalPiutangBaru2 = debtSummary._sum?.totalAmount || 0;
-    if (totalPiutangBaru2 > 0 || cicilanMasuk > 0) {
-      addSectionHeader(ws3, '💳 RINGKASAN PIUTANG PERIODE INI', currentRow);
-      currentRow++;
-      addLabelValue(ws3, 'Piutang Baru Dicatat', totalPiutangBaru2, currentRow);
-      currentRow++;
-      addLabelValue(ws3, 'Cicilan Diterima', cicilanMasuk, currentRow);
-      currentRow++;
-      addLabelValue(ws3, 'Total Piutang Aktif (Akumulasi Semua)', activeDebt._sum?.remaining || 0, currentRow);
-      currentRow++;
-    }
-
-    const buffer = await workbook.xlsx.writeBuffer();
-    const periodLabel = isAllTime ? 'semua-waktu' : `${startParam || 'today'}-${endParam || 'today'}`;
-    
-    return new NextResponse(buffer as any, {
-      headers: {
-        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': `attachment; filename="laporan-analisis-${periodLabel}.xlsx"`,
-      }
-    });
+  // === BLOK B: Laba Rugi
+  addSecHeader(wsRing, '📉 B. LAPORAN LABA RUGI SEDERHANA');
+  addKV(wsRing, 'Total Omzet', totalOmzetSesungguhnya);
+  addKV(wsRing, '(-) Total HPP / Modal Penjualan', totalHppAll);
+  addKV(wsRing, '(=) Laba Kotor', profitKotor, '#,##0', true, profitKotor >= 0);
+  addKV(wsRing, 'Margin Laba Kotor (%)', parseFloat(avgMargin.toFixed(2)), '0.00"%"');
+  addKV(wsRing, '(-) Pengeluaran Operasional', totalPengeluaranAll);
+  addKV(wsRing, '(=) LABA BERSIH', labaBersih, '#,##0', true, labaBersih >= 0);
+  // Color laba bersih
+  {
+    const labaBersihRow = wsRing.getRow(r - 1);
+    const labaBersihVC  = labaBersihRow.getCell(2);
+    labaBersihVC.font  = { bold: true, size: 13, color: { argb: labaBersih >= 0 ? `FF${GREEN_DK}` : `FF${RED}` } };
+    labaBersihRow.getCell(1).font = { bold: true, size: 11 };
   }
+  r++;
 
-  if (type === 'pdf') {
-    const doc = new jsPDF();
-    doc.text(`Laporan Penjualan (${startParam || 'Hari Ini'} - ${endParam || 'Hari Ini'})`, 14, 15);
-    
-    const tableColumn = ["No. Nota", "Waktu", "Member", "Kasir", "Metode", "Total (Rp)"];
-    const tableRows = transactions.map(t => [
-      t.receiptNumber,
-      new Date(t.createdAt).toLocaleString('id-ID'),
-      t.member?.name ?? '-',
-      t.cashierName,
-      t.paymentMethod.toUpperCase(),
-      (t.totalAmount - t.discountAmount).toLocaleString('id-ID')
-    ]);
+  // === BLOK C: Kas
+  addSecHeader(wsRing, '🏦 C. POSISI KAS & PIUTANG');
+  addKV(wsRing, 'Kas Real Masuk (Tunai + Cicilan)', kasRealMasuk, '#,##0', true, true);
+  addKV(wsRing, 'Piutang Aktif (Akumulasi belum lunas)', activeDebt._sum?.remaining || 0);
+  addKV(wsRing, 'Piutang Baru Periode Ini', totalPiutangBaru);
+  addKV(wsRing, 'Cicilan Masuk Periode Ini', cicilanMasuk);
+  r++;
 
-    (doc as any).autoTable({
-      head: [tableColumn],
-      body: tableRows,
-      startY: 20,
+  // === BLOK D: Metode Pembayaran
+  addSecHeader(wsRing, '💳 D. BREAKDOWN METODE PEMBAYARAN');
+  const mhRow = wsRing.getRow(r);
+  ['Metode', 'Jml Transaksi', 'Total Omzet (Rp)', 'Persentase', 'Kontribusi Kas Real'].forEach((h, i) => {
+    const c = mhRow.getCell(i + 1);
+    c.value = h;
+    c.font  = { bold: true, size: 10 };
+    c.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${GRAY_HD}` } };
+    c.alignment = { horizontal: i === 0 ? 'left' : 'right' };
+    c.border = { bottom: { style: 'thin' } };
+  });
+  r++;
+
+  const methodMap = new Map<string, { count: number; total: number }>();
+  transactions.forEach(tx => {
+    const m = tx.paymentMethod.toLowerCase();
+    const ex = methodMap.get(m) || { count: 0, total: 0 };
+    methodMap.set(m, { count: ex.count + 1, total: ex.total + (tx.totalAmount - tx.discountAmount) });
+  });
+
+  const methodOrder = ['cash', 'qris', 'debit', 'transfer', 'utang'];
+  methodOrder.forEach(method => {
+    const d   = methodMap.get(method) || { count: 0, total: 0 };
+    const pct = totalOmzetSesungguhnya > 0 ? (d.total / totalOmzetSesungguhnya) * 100 : 0;
+    const row = wsRing.getRow(r);
+    row.getCell(1).value = method === 'utang' ? '⚠ UTANG' : method.toUpperCase();
+    row.getCell(2).value = d.count;
+    row.getCell(2).numFmt = '0';
+    row.getCell(2).alignment = { horizontal: 'right' };
+    row.getCell(3).value = d.total;
+    row.getCell(3).numFmt = '#,##0';
+    row.getCell(3).alignment = { horizontal: 'right' };
+    row.getCell(4).value = parseFloat(pct.toFixed(2));
+    row.getCell(4).numFmt = '0.00"%"';
+    row.getCell(4).alignment = { horizontal: 'right' };
+    row.getCell(5).value = method !== 'utang' ? d.total : 0;
+    row.getCell(5).numFmt = '#,##0';
+    row.getCell(5).alignment = { horizontal: 'right' };
+    if (method === 'utang') {
+      row.getCell(1).font = { color: { argb: `FF${GOLD}` }, bold: true };
+    }
+    r++;
+  });
+  r++;
+
+  // === BLOK E: Pengeluaran per Kategori
+  addSecHeader(wsRing, '📋 E. PENGELUARAN PER KATEGORI');
+  const ehRow = wsRing.getRow(r);
+  ['Kategori', 'Jml Transaksi', 'Total (Rp)', 'Persentase dari Total'].forEach((h, i) => {
+    const c = ehRow.getCell(i + 1);
+    c.value = h;
+    c.font  = { bold: true, size: 10 };
+    c.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${GRAY_HD}` } };
+    c.alignment = { horizontal: i === 0 ? 'left' : 'right' };
+    c.border = { bottom: { style: 'thin' } };
+  });
+  r++;
+
+  const catMap = new Map<string, { count: number; total: number }>();
+  expenses.forEach(e => {
+    const ex = catMap.get(e.category) || { count: 0, total: 0 };
+    catMap.set(e.category, { count: ex.count + 1, total: ex.total + e.amount });
+  });
+  [...catMap.entries()].sort((a, b) => b[1].total - a[1].total).forEach(([cat, d]) => {
+    const pct = totalPengeluaranAll > 0 ? (d.total / totalPengeluaranAll) * 100 : 0;
+    const row = wsRing.getRow(r);
+    row.getCell(1).value = cat;
+    row.getCell(2).value = d.count;
+    row.getCell(2).alignment = { horizontal: 'right' };
+    row.getCell(3).value = d.total;
+    row.getCell(3).numFmt = '#,##0';
+    row.getCell(3).alignment = { horizontal: 'right' };
+    row.getCell(4).value = parseFloat(pct.toFixed(2));
+    row.getCell(4).numFmt = '0.00"%"';
+    row.getCell(4).alignment = { horizontal: 'right' };
+    r++;
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // SHEET 2 — TREN HARIAN
+  // ══════════════════════════════════════════════════════════════════════════
+  const wsTren = wb.addWorksheet('Tren Harian');
+  wsTren.columns = [
+    { header: 'Tanggal',         key: 'tgl',    width: 16 },
+    { header: 'Jml Transaksi',   key: 'cnt',    width: 16 },
+    { header: 'Total Diskon (Rp)', key: 'dis', width: 20 },
+    { header: 'Omzet Netto (Rp)', key: 'omz',  width: 20 },
+    { header: 'HPP (Rp)',        key: 'hpp',    width: 18 },
+    { header: 'Laba Kotor (Rp)', key: 'laba',  width: 20 },
+    { header: 'Margin (%)',      key: 'mrg',    width: 14 },
+  ];
+  styleHeader(wsTren.getRow(1), NAVY);
+  wsTren.views = [{ state: 'frozen', ySplit: 1 }];
+  wsTren.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 7 } };
+
+  dailyTrend.forEach((day, idx) => {
+    const omzet  = Number(day.omzet || 0);
+    const hpp    = Number(day.hpp   || 0);
+    const diskon = Number(day.diskon || 0);
+    const laba   = omzet - hpp;
+    const margin = omzet > 0 ? (laba / omzet) * 100 : 0;
+    const tgl    = typeof day.date === 'object' ? (day.date as Date).toISOString().split('T')[0] : String(day.date);
+    const row    = wsTren.addRow({ tgl, cnt: Number(day.count), dis: diskon, omz: omzet, hpp, laba, mrg: parseFloat(margin.toFixed(2)) });
+    row.getCell('dis').numFmt  = '#,##0';
+    row.getCell('omz').numFmt  = '#,##0';
+    row.getCell('hpp').numFmt  = '#,##0';
+    row.getCell('laba').numFmt = '#,##0';
+    row.getCell('mrg').numFmt  = '0.00"%"';
+    row.getCell('laba').font   = { color: { argb: laba >= 0 ? `FF${GREEN_DK}` : `FF${RED}` } };
+    ['dis','omz','hpp','laba','mrg'].forEach(k => row.getCell(k).alignment = { horizontal: 'right' });
+    if (idx % 2 === 1) altRow(row, 'F0FDF4');
+  });
+
+  // Total row
+  const tTren = wsTren.addRow({
+    tgl: 'TOTAL', cnt: transactions.length, dis: totalDiskonAll,
+    omz: totalOmzetSesungguhnya, hpp: totalHppAll,
+    laba: profitKotor, mrg: parseFloat(avgMargin.toFixed(2))
+  });
+  tTren.eachCell({ includeEmpty: true }, (cell: any) => {
+    cell.font = { bold: true };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FFD1FAE5` } };
+  });
+  ['dis','omz','hpp','laba'].forEach(k => { tTren.getCell(k).numFmt = '#,##0'; tTren.getCell(k).alignment = { horizontal: 'right' }; });
+  tTren.getCell('mrg').numFmt = '0.00"%"'; tTren.getCell('mrg').alignment = { horizontal: 'right' };
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // SHEET 3 — DATA TRANSAKSI DETAIL
+  // ══════════════════════════════════════════════════════════════════════════
+  const wsTx = wb.addWorksheet('Data Transaksi');
+  wsTx.columns = [
+    { header: 'No. Nota',       key: 'nota',    width: 26 },
+    { header: 'Waktu',          key: 'waktu',   width: 22 },
+    { header: 'Kasir',          key: 'kasir',   width: 16 },
+    { header: 'Shift',          key: 'shift',   width: 14 },
+    { header: 'Member',         key: 'member',  width: 20 },
+    { header: 'Metode',         key: 'metode',  width: 12 },
+    { header: 'Bruto (Rp)',     key: 'bruto',   width: 16 },
+    { header: 'Diskon (Rp)',    key: 'diskon',  width: 14 },
+    { header: 'Netto (Rp)',     key: 'netto',   width: 16 },
+    { header: 'HPP (Rp)',       key: 'hpp',     width: 16 },
+    { header: 'Profit (Rp)',    key: 'profit',  width: 16 },
+    { header: 'Margin (%)',     key: 'margin',  width: 12 },
+    { header: 'Item Dibeli',    key: 'items',   width: 55 },
+  ];
+  styleHeader(wsTx.getRow(1), EMERALD);
+  wsTx.views = [{ state: 'frozen', ySplit: 1 }];
+  wsTx.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 13 } };
+
+  transactions.forEach((tx, idx) => {
+    let txHpp = 0;
+    const itemsList: string[] = [];
+    tx.details.forEach(d => {
+      txHpp += (d.priceBuyAtTime || 0) * d.quantity;
+      itemsList.push(`${d.product.name} ×${d.quantity} @${rp(d.priceAtTime)}`);
+    });
+    const netto  = tx.totalAmount - tx.discountAmount;
+    const profit = netto - txHpp;
+    const margin = netto > 0 ? (profit / netto) * 100 : 0;
+
+    const row = wsTx.addRow({
+      nota:   tx.receiptNumber,
+      waktu:  new Date(tx.createdAt).toLocaleString('id-ID'),
+      kasir:  tx.cashierName,
+      shift:  tx.shiftId ? (shiftMap.get(tx.shiftId) || '-') : '-',
+      member: tx.member?.name || 'Umum',
+      metode: tx.paymentMethod.toUpperCase(),
+      bruto:  tx.totalAmount,
+      diskon: tx.discountAmount,
+      netto,
+      hpp:    txHpp,
+      profit,
+      margin: parseFloat(margin.toFixed(2)),
+      items:  itemsList.join(' | '),
     });
 
-    const finalY = (doc as any).lastAutoTable.finalY || 20;
-    
-    doc.text(`Pengeluaran Operasional`, 14, finalY + 15);
-    
-    const expenseColumn = ["Waktu", "Kategori", "Kasir", "Nominal (Rp)", "Keterangan"];
-    const expensePdfRows = expenses.map(e => [
-      new Date(e.date).toLocaleString('id-ID'),
-      e.category,
-      e.employee.name,
-      e.amount.toLocaleString('id-ID'),
-      e.notes || '-'
-    ]);
+    ['bruto','diskon','netto','hpp','profit'].forEach(k => {
+      row.getCell(k).numFmt = '#,##0';
+      row.getCell(k).alignment = { horizontal: 'right' };
+    });
+    row.getCell('margin').numFmt = '0.00"%"';
+    row.getCell('margin').alignment = { horizontal: 'center' };
+    row.getCell('profit').font = { color: { argb: profit >= 0 ? `FF${GREEN_DK}` : `FF${RED}` } };
+    if (tx.paymentMethod === 'utang') {
+      row.getCell('metode').font = { color: { argb: `FF${GOLD}` }, bold: true };
+    }
+    if (idx % 2 === 1) altRow(row, 'F0FDF4');
+  });
 
-    (doc as any).autoTable({
-      head: [expenseColumn],
-      body: expensePdfRows,
-      startY: finalY + 20,
+  // ══════════════════════════════════════════════════════════════════════════
+  // SHEET 4 — ANALISIS PRODUK TERJUAL
+  // ══════════════════════════════════════════════════════════════════════════
+  const wsProd = wb.addWorksheet('Analisis Produk');
+  wsProd.columns = [
+    { header: 'Rank',              key: 'rank',  width: 8 },
+    { header: 'SKU',               key: 'sku',   width: 16 },
+    { header: 'Nama Produk',       key: 'name',  width: 34 },
+    { header: 'Total Terjual (pcs)', key: 'qty', width: 20 },
+    { header: 'Omzet (Rp)',        key: 'omz',   width: 18 },
+    { header: 'HPP Total (Rp)',    key: 'hpp',   width: 18 },
+    { header: 'Laba (Rp)',         key: 'laba',  width: 18 },
+    { header: 'Margin (%)',        key: 'mrg',   width: 14 },
+    { header: 'Kontribusi Omzet (%)', key: 'ktb', width: 20 },
+  ];
+  styleHeader(wsProd.getRow(1), GOLD);
+  wsProd.views = [{ state: 'frozen', ySplit: 1 }];
+  wsProd.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 9 } };
+
+  allProducts.forEach((p, idx) => {
+    const omzet = Number(p.totalOmzet || 0);
+    const hpp   = Number(p.totalHpp   || 0);
+    const laba  = omzet - hpp;
+    const margin = omzet > 0 ? (laba / omzet) * 100 : 0;
+    const ktb    = totalOmzetSesungguhnya > 0 ? (omzet / totalOmzetSesungguhnya) * 100 : 0;
+
+    const row = wsProd.addRow({
+      rank: idx + 1,
+      sku:  p.sku,
+      name: p.name,
+      qty:  Number(p.totalQty),
+      omz:  omzet,
+      hpp,
+      laba,
+      mrg:  parseFloat(margin.toFixed(2)),
+      ktb:  parseFloat(ktb.toFixed(2)),
     });
 
-    const pdfOutput = doc.output('arraybuffer');
-    return new NextResponse(pdfOutput, {
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="laporan-${startParam || 'today'}-${endParam || 'today'}.pdf"`,
-      }
-    });
-  }
+    ['omz','hpp','laba'].forEach(k => { row.getCell(k).numFmt = '#,##0'; row.getCell(k).alignment = { horizontal: 'right' }; });
+    ['mrg','ktb'].forEach(k => { row.getCell(k).numFmt = '0.00"%"'; row.getCell(k).alignment = { horizontal: 'right' }; });
+    row.getCell('qty').alignment = { horizontal: 'right' };
+    row.getCell('rank').alignment = { horizontal: 'center' };
+    row.getCell('laba').font = { color: { argb: laba >= 0 ? `FF${GREEN_DK}` : `FF${RED}` } };
 
-  return new NextResponse('Invalid Type', { status: 400 });
+    if (idx === 0) {
+      row.getCell('name').font = { bold: true, color: { argb: `FF${GOLD}` } };
+      row.getCell('rank').value = '🏆 1';
+    }
+    if (idx % 2 === 1) altRow(row, 'FFFBEB');
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // SHEET 5 — PENGELUARAN OPERASIONAL
+  // ══════════════════════════════════════════════════════════════════════════
+  const wsExp = wb.addWorksheet('Pengeluaran Operasional');
+  wsExp.columns = [
+    { header: 'Waktu',          key: 'waktu',   width: 22 },
+    { header: 'Kategori',       key: 'kat',     width: 22 },
+    { header: 'Nominal (Rp)',   key: 'nominal', width: 18 },
+    { header: 'Dibuat Oleh',    key: 'kasir',   width: 20 },
+    { header: 'Keterangan',     key: 'ket',     width: 42 },
+  ];
+  styleHeader(wsExp.getRow(1), RED);
+  wsExp.views = [{ state: 'frozen', ySplit: 1 }];
+  wsExp.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 5 } };
+
+  expenses.forEach((e, idx) => {
+    const row = wsExp.addRow({
+      waktu:   new Date(e.date).toLocaleString('id-ID'),
+      kat:     e.category,
+      nominal: e.amount,
+      kasir:   e.employee?.name || '-',
+      ket:     e.notes || '-',
+    });
+    row.getCell('nominal').numFmt = '#,##0';
+    row.getCell('nominal').alignment = { horizontal: 'right' };
+    if (idx % 2 === 1) altRow(row, 'FFF1F2');
+  });
+
+  // Total Pengeluaran row
+  const tExp = wsExp.addRow({ waktu: '', kat: 'TOTAL PENGELUARAN', nominal: totalPengeluaranAll, kasir: '', ket: `${expenses.length} pos pengeluaran` });
+  tExp.eachCell({ includeEmpty: false }, (cell: any) => {
+    cell.font = { bold: true };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FFFECACA` } };
+  });
+  tExp.getCell('nominal').numFmt = '#,##0';
+  tExp.getCell('nominal').alignment = { horizontal: 'right' };
+
+  // ─── RETURN ─────────────────────────────────────────────────────────────
+  const buffer     = await wb.xlsx.writeBuffer();
+  const periodSlug = isAllTime ? 'semua-waktu' : `${startParam || todayStr}-sd-${endParam || startParam || todayStr}`;
+
+  return new NextResponse(buffer as any, {
+    headers: {
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="Laporan-Keuangan-${periodSlug}.xlsx"`,
+    },
+  });
 }

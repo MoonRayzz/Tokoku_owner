@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@/app/lib/supabase/client';
 import { useRouter } from 'next/navigation';
-import { ShieldCheck, AlertTriangle } from 'lucide-react';
+import { ShieldCheck, AlertTriangle, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { revalidateManifest } from '../actions';
@@ -43,6 +43,11 @@ export default function PengaturanClient({ initialEmail }: PengaturanClientProps
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isUpdatingAuth, setIsUpdatingAuth] = useState(false);
+
+  // Toggle show/hide State
+  const [showVoidPin, setShowVoidPin] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   useEffect(() => {
     async function loadStoreProfile() {
@@ -281,7 +286,26 @@ export default function PengaturanClient({ initialEmail }: PengaturanClientProps
                 <h3 className="text-sm font-bold text-text-primary">🛡️ Keamanan Toko Lokal</h3>
                 <div>
                   <label className="block text-sm text-text-secondary mb-1">PIN Void Transaksi (Kasir)</label>
-                  <input name="voidPin" value={voidPin} onChange={e => setVoidPin(e.target.value)} type="password" maxLength={6} placeholder="123456" className="w-full bg-background border border-border rounded px-3 py-2 text-text-primary focus:outline-none min-h-[44px] tracking-widest focus:border-primary-container" />
+                <div className="relative">
+                    <input
+                      name="voidPin"
+                      value={voidPin}
+                      onChange={e => setVoidPin(e.target.value)}
+                      type={showVoidPin ? 'text' : 'password'}
+                      maxLength={6}
+                      placeholder="123456"
+                      className="w-full bg-background border border-border rounded px-3 py-2 pr-10 text-text-primary focus:outline-none min-h-[44px] tracking-widest focus:border-primary-container"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowVoidPin(v => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary transition-colors"
+                      tabIndex={-1}
+                      aria-label={showVoidPin ? 'Sembunyikan PIN' : 'Tampilkan PIN'}
+                    >
+                      {showVoidPin ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
                   <p className="text-xs text-text-secondary mt-1">Gunakan PIN ini untuk membatalkan nota dari kasir lokal.</p>
                 </div>
               </div>
@@ -406,19 +430,45 @@ export default function PengaturanClient({ initialEmail }: PengaturanClientProps
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm text-text-secondary mb-1">Kata Sandi Baru</label>
-                <input 
-                  type="password" placeholder="••••••••"
-                  value={password} onChange={e => setPassword(e.target.value)}
-                  className="w-full bg-background border border-border rounded px-3 py-2 text-text-primary focus:outline-none min-h-[44px] focus:border-primary-container" 
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    className="w-full bg-background border border-border rounded px-3 py-2 pr-10 text-text-primary focus:outline-none min-h-[44px] focus:border-primary-container"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary transition-colors"
+                    tabIndex={-1}
+                    aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="block text-sm text-text-secondary mb-1">Konfirmasi Kata Sandi Baru</label>
-                <input 
-                  type="password" placeholder="••••••••"
-                  value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
-                  className="w-full bg-background border border-border rounded px-3 py-2 text-text-primary focus:outline-none min-h-[44px] focus:border-primary-container" 
-                />
+                <div className="relative">
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    className="w-full bg-background border border-border rounded px-3 py-2 pr-10 text-text-primary focus:outline-none min-h-[44px] focus:border-primary-container"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary transition-colors"
+                    tabIndex={-1}
+                    aria-label={showConfirmPassword ? 'Sembunyikan konfirmasi' : 'Tampilkan konfirmasi'}
+                  >
+                    {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
               </div>
             </div>
             <div className="pt-4 flex justify-end">
