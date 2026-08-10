@@ -24,7 +24,7 @@ function MobileStatusDot() {
       if (data && data.lastPing) {
         const pingTime = new Date(data.lastPing).getTime();
         const now = Date.now();
-        setIsOnline(now - pingTime <= 45000);
+        setIsOnline(now - pingTime <= 180000);
       } else {
         setIsOnline(false);
       }
