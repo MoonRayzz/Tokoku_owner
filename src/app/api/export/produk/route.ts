@@ -1,10 +1,17 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { createClient } from '@/app/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return new NextResponse('Unauthorized', { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const startParam = searchParams.get('startDate');
     const endParam   = searchParams.get('endDate');

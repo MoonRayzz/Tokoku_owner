@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { Prisma } from '@prisma/client';
+import { createClient } from '@/app/lib/supabase/server';
 
 export async function GET(request: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return new NextResponse('Unauthorized', { status: 401 });
+  }
+
   const { searchParams } = new URL(request.url);
   const startParam = searchParams.get('start');
   const endParam   = searchParams.get('end');
@@ -89,9 +96,9 @@ export async function GET(request: NextRequest) {
     ORDER BY SUM(td."quantity") DESC
   `;
 
-  const debtSummary   = await prisma.debt.aggregate({ where: { createdAt: { gte: start, lte: end } }, _sum: { totalAmount: true } });
+  const debtSummary   = await prisma.debt.aggregate({ where: { createdAt: { gte: start, lte: end }, status: { not: 'VOID' } }, _sum: { totalAmount: true } });
   const cicilanSummary = await prisma.debtPayment.aggregate({ where: { paidAt: { gte: start, lte: end } }, _sum: { amount: true } });
-  const activeDebt    = await prisma.debt.aggregate({ where: { status: { not: 'PAID' } }, _sum: { remaining: true } });
+  const activeDebt    = await prisma.debt.aggregate({ where: { status: { notIn: ['PAID', 'VOID'] } }, _sum: { remaining: true } });
 
   // ─── KALKULASI UTAMA ───────────────────────────────────────────────────────
   let totalOmzetTunai = 0, totalPiutangBaru = 0, totalHppAll = 0, totalDiskonAll = 0;

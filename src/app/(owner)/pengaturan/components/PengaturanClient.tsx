@@ -147,21 +147,40 @@ export default function PengaturanClient({ initialEmail }: PengaturanClientProps
       warning('Kata sandi baru dan konfirmasi tidak cocok!');
       return;
     }
-    
+
+    const emailChanged = email !== initialEmail;
+    const passwordChanged = !!password;
+
+    if (!emailChanged && !passwordChanged) {
+      warning('Tidak ada perubahan untuk disimpan.');
+      return;
+    }
+
     setIsUpdatingAuth(true);
     try {
-      const updates: any = {};
-      if (email !== initialEmail) updates.email = email;
-      if (password) updates.password = password;
-
-      if (Object.keys(updates).length > 0) {
-        const { error } = await supabase.auth.updateUser(updates);
-        if (error) throw error;
-        success('Kredensial berhasil diperbarui!');
+      // Update password (langsung berlaku, tidak perlu konfirmasi)
+      if (passwordChanged) {
+        const { error: pwErr } = await supabase.auth.updateUser({ password });
+        if (pwErr) throw pwErr;
+        success('Kata sandi berhasil diperbarui!');
         setPassword('');
         setConfirmPassword('');
-      } else {
-        warning('Tidak ada perubahan untuk disimpan.');
+      }
+
+      // Update email (Supabase kirim link konfirmasi ke email BARU dulu)
+      if (emailChanged) {
+        const { error: emailErr } = await supabase.auth.updateUser(
+          { email },
+          { emailRedirectTo: window.location.origin + '/login' }
+        );
+        if (emailErr) throw emailErr;
+
+        // Tampilkan pesan bahwa email belum berubah sampai link dikonfirmasi
+        warning(
+          `Link konfirmasi dikirim ke "${email}". Cek inbox email baru tersebut dan klik link konfirmasi. Email login belum berubah sampai link dikonfirmasi.`
+        );
+        // Reset tampilan ke email awal agar tidak membingungkan
+        setEmail(initialEmail);
       }
     } catch (err: any) {
       toastError('Gagal memperbarui: ' + err.message);

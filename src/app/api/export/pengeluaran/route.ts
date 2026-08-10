@@ -1,8 +1,15 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { createClient } from '@/app/lib/supabase/server';
 
 export async function GET(request: Request) {
   try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return new NextResponse('Unauthorized', { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get('startDate');
     const endDate   = searchParams.get('endDate');
