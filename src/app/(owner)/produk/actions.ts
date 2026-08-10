@@ -35,6 +35,7 @@ export async function updateProduct(formData: FormData) {
         priceRetail,
         priceWholesale,
         wholesaleMinQty,
+        stock,
         minStockAlert
       }
     });
